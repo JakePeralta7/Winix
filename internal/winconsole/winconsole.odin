@@ -69,3 +69,27 @@ write_console :: proc(h: win.HANDLE, s: string) -> (int, Error) {
     }
     return len(s), .None
 }
+
+fmt_last_error :: proc(code: u32, allocator := context.allocator) -> string {
+    buf: [512]u16
+    flags: win.DWORD = win.FORMAT_MESSAGE_FROM_SYSTEM | win.FORMAT_MESSAGE_IGNORE_INSERTS
+    n := win.FormatMessageW(flags, nil, win.DWORD(code), 0, raw_data(buf[:]), win.DWORD(len(buf)), nil)
+    if n == 0 {
+        return clone_string("unknown error", allocator)
+    }
+    for n > 0 && (buf[n-1] == '\r' || buf[n-1] == '\n' || buf[n-1] == 0) {
+        n -= 1
+    }
+    s, err := win.utf16_to_utf8(buf[:n], allocator)
+    if err != nil {
+        return clone_string("unknown error", allocator)
+    }
+    return s
+}
+
+@(private)
+clone_string :: proc(s: string, allocator: runtime.Allocator) -> string {
+    bytes := make([]u8, len(s), allocator)
+    copy(bytes, transmute([]u8)s)
+    return string(bytes)
+}

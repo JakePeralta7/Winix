@@ -63,3 +63,14 @@ hebrew_string_writes_exact_utf8_bytes :: proc(t: ^testing.T) {
         testing.expect_value(t, b, expected[i])
     }
 }
+
+@(test)
+fmt_last_error_returns_nonempty_no_crlf :: proc(t: ^testing.T) {
+    msg := winconsole.fmt_last_error(2 /* ERROR_FILE_NOT_FOUND */, context.allocator)
+    defer delete(msg)
+    testing.expect(t, len(msg) > 0, "expected a non-empty message")
+    if len(msg) > 0 {
+        last := msg[len(msg)-1]
+        testing.expect(t, last != '\n' && last != '\r', "expected no trailing CR/LF")
+    }
+}
