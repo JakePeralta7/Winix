@@ -76,3 +76,23 @@ extra_arg_exits_2 :: proc(t: ^testing.T) {
     _, _, code := run(t, []string{"foo"}, tmp)
     testing.expect_value(t, code, 2)
 }
+
+@(test)
+hebrew_cwd_is_utf8_in_pipe :: proc(t: ^testing.T) {
+    base, _ := os.temp_dir(context.allocator)
+    defer delete(base)
+    name := "winix-it-שלום"
+    dir := strings.concatenate({strings.trim_suffix(base, "\\"), "\\", name}, context.allocator)
+    defer delete(dir)
+    if !os.exists(dir) {
+        if err := os.make_directory(dir); err != nil {
+            testing.fail_now(t, "make_directory failed")
+        }
+    }
+    defer os.remove(dir)
+
+    out, _, code := run(t, []string{}, dir)
+    testing.expect_value(t, code, 0)
+    hebrew_utf8 := "\xD7\xA9\xD7\x9C\xD7\x95\xD7\x9D"
+    testing.expect(t, strings.contains(string(out), hebrew_utf8), "expected Hebrew UTF-8 bytes in piped stdout")
+}
