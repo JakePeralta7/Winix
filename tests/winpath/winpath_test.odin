@@ -40,3 +40,26 @@ logical_with_unset_pwd_matches_physical :: proc(t: ^testing.T) {
     testing.expect_value(t, err2, winpath.Error.None)
     testing.expect_value(t, p_log, p_phy)
 }
+
+@(test)
+logical_with_lowercase_pwd_returns_pwd_value :: proc(t: ^testing.T) {
+    p_phy, err1 := winpath.get_cwd_physical(context.allocator)
+    defer delete(p_phy)
+    testing.expect_value(t, err1, winpath.Error.None)
+
+    if !(len(p_phy) >= 2 && p_phy[1] == ':') {
+        testing.fail_now(t, "expected drive-letter path for this test")
+    }
+    lower := make([]u8, len(p_phy), context.allocator)
+    defer delete(lower)
+    copy(lower, transmute([]u8)p_phy)
+    if lower[0] >= 'A' && lower[0] <= 'Z' do lower[0] = lower[0] - 'A' + 'a'
+
+    os.set_env("PWD", string(lower))
+    defer os.unset_env("PWD")
+
+    p_log, err2 := winpath.get_cwd_logical(context.allocator)
+    defer delete(p_log)
+    testing.expect_value(t, err2, winpath.Error.None)
+    testing.expect_value(t, p_log, p_phy)
+}
