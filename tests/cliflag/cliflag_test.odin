@@ -98,3 +98,13 @@ parse_unknown_long_returns_error :: proc(t: ^testing.T) {
     testing.expect_value(t, err, cliflag.Parse_Error.Unknown_Flag)
     testing.expect_value(t, tok, "--nope")
 }
+
+@(test)
+parse_keeps_positional_in_rest :: proc(t: ^testing.T) {
+    physical, help, version: bool
+    parsed, err, _ := cliflag.parse({"-L", "foo", "bar"}, pwd_spec(&physical, &help, &version))
+    testing.expect_value(t, err, cliflag.Parse_Error.None)
+    testing.expect_value(t, len(parsed.rest), 2)
+    testing.expect_value(t, parsed.rest[0], "foo")
+    testing.expect_value(t, parsed.rest[1], "bar")
+}
