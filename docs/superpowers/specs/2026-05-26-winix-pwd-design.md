@@ -54,7 +54,7 @@ Dependency rules:
 - `cmd/*` packages MUST NOT import other `cmd/*` packages.
 - `internal/*` packages may import `core:*` only — no cross-`internal` deps for now.
 
-Toolchain: latest stable Odin compiler with `core:sys/windows`, `core:testing`, and `core:os/os2` (used by integration tests for process spawn).
+Toolchain: latest stable Odin compiler with `core:sys/windows`, `core:testing`, and `core:os` (the process API — `os.process_exec` — is used by integration tests for spawn + capture).
 
 ## `pwd` behavior
 
@@ -282,7 +282,7 @@ os.args ──► cliflag.parse ──► Parsed{physical}
 
 ### Integration tests (`tests/pwd_integration/`, run via `odin test`)
 
-A pure-Odin runner spawns `bin/pwd.exe` via `os2.process_start`, sets `cwd` to a temp directory, captures stdout/stderr/exit.
+A pure-Odin runner spawns `bin/pwd.exe` via `os.process_exec` (from `core:os`), sets `working_dir` to a temp directory, captures stdout/stderr/exit.
 
 - `bin/pwd.exe` in `<temp>\xyz` → stdout = `<temp>\xyz\r\n`, exit 0
 - `bin/pwd.exe -P` in a junction pointing to `<temp>\target` → stdout = `<temp>\target\r\n`, exit 0
