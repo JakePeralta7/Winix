@@ -27,6 +27,30 @@ Parsed :: struct {
 }
 
 parse :: proc(args: []string, spec: Spec) -> (Parsed, Parse_Error, string) {
-    // Minimal: no flags parsed yet. Return all args as rest.
-    return Parsed{rest = args}, .None, ""
+    rest := make([dynamic]string, 0, len(args), context.temp_allocator)
+    for arg in args {
+        if len(arg) >= 2 && arg[0] == '-' && arg[1] != '-' {
+            // Short flags. Each char after '-' is a flag.
+            for r in arg[1:] {
+                def, ok := find_short(spec, r)
+                if !ok {
+                    return Parsed{rest = rest[:]}, .Unknown_Flag, arg
+                }
+                def.target^ = def.value_if_set
+            }
+            continue
+        }
+        append(&rest, arg)
+    }
+    return Parsed{rest = rest[:]}, .None, ""
+}
+
+@(private)
+find_short :: proc(spec: Spec, r: rune) -> (Flag_Def, bool) {
+    for def in spec.flags {
+        if def.short == r {
+            return def, true
+        }
+    }
+    return {}, false
 }
