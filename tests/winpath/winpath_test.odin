@@ -63,3 +63,16 @@ logical_with_lowercase_pwd_returns_pwd_value :: proc(t: ^testing.T) {
     testing.expect_value(t, err2, winpath.Error.None)
     testing.expect_value(t, p_log, p_phy)
 }
+
+@(test)
+logical_with_bogus_pwd_falls_back :: proc(t: ^testing.T) {
+    os.set_env("PWD", "Z:\\definitely\\does\\not\\exist\\winix-test")
+    defer os.unset_env("PWD")
+    p_log, err1 := winpath.get_cwd_logical(context.allocator)
+    defer delete(p_log)
+    p_phy, err2 := winpath.get_cwd_physical(context.allocator)
+    defer delete(p_phy)
+    testing.expect_value(t, err1, winpath.Error.None)
+    testing.expect_value(t, err2, winpath.Error.None)
+    testing.expect_value(t, p_log, p_phy)
+}
