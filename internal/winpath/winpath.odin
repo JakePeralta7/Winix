@@ -106,7 +106,7 @@ read_cwd_utf16 :: proc(allocator: runtime.Allocator) -> ([]u16, Error) {
     }
     buf := make([]u16, int(n), allocator)
     got := win.GetCurrentDirectoryW(n, raw_data(buf))
-    if got == 0 {
+    if got == 0 || got >= n {
         return nil, .GetCwd_Failed
     }
     return buf[:got], .None
