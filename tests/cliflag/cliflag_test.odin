@@ -108,3 +108,19 @@ parse_keeps_positional_in_rest :: proc(t: ^testing.T) {
     testing.expect_value(t, parsed.rest[0], "foo")
     testing.expect_value(t, parsed.rest[1], "bar")
 }
+
+@(test)
+parse_bundled_LP_last_wins_physical_true :: proc(t: ^testing.T) {
+    physical, help, version: bool
+    _, err, _ := cliflag.parse({"-LP"}, pwd_spec(&physical, &help, &version))
+    testing.expect_value(t, err, cliflag.Parse_Error.None)
+    testing.expect_value(t, physical, true)
+}
+
+@(test)
+parse_bundled_PL_last_wins_physical_false :: proc(t: ^testing.T) {
+    physical, help, version: bool
+    _, err, _ := cliflag.parse({"-PL"}, pwd_spec(&physical, &help, &version))
+    testing.expect_value(t, err, cliflag.Parse_Error.None)
+    testing.expect_value(t, physical, false)
+}
