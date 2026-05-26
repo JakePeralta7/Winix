@@ -74,3 +74,27 @@ parse_unknown_short_returns_error :: proc(t: ^testing.T) {
     testing.expect_value(t, err, cliflag.Parse_Error.Unknown_Flag)
     testing.expect_value(t, tok, "-X")
 }
+
+@(test)
+parse_long_help :: proc(t: ^testing.T) {
+    physical, help, version: bool
+    _, err, _ := cliflag.parse({"--help"}, pwd_spec(&physical, &help, &version))
+    testing.expect_value(t, err, cliflag.Parse_Error.None)
+    testing.expect_value(t, help, true)
+}
+
+@(test)
+parse_long_version :: proc(t: ^testing.T) {
+    physical, help, version: bool
+    _, err, _ := cliflag.parse({"--version"}, pwd_spec(&physical, &help, &version))
+    testing.expect_value(t, err, cliflag.Parse_Error.None)
+    testing.expect_value(t, version, true)
+}
+
+@(test)
+parse_unknown_long_returns_error :: proc(t: ^testing.T) {
+    physical, help, version: bool
+    _, err, tok := cliflag.parse({"--nope"}, pwd_spec(&physical, &help, &version))
+    testing.expect_value(t, err, cliflag.Parse_Error.Unknown_Flag)
+    testing.expect_value(t, tok, "--nope")
+}

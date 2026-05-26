@@ -29,8 +29,16 @@ Parsed :: struct {
 parse :: proc(args: []string, spec: Spec) -> (Parsed, Parse_Error, string) {
     rest := make([dynamic]string, 0, len(args), context.temp_allocator)
     for arg in args {
+        if len(arg) >= 3 && arg[0] == '-' && arg[1] == '-' {
+            name := arg[2:]
+            def, ok := find_long(spec, name)
+            if !ok {
+                return Parsed{rest = rest[:]}, .Unknown_Flag, arg
+            }
+            def.target^ = def.value_if_set
+            continue
+        }
         if len(arg) >= 2 && arg[0] == '-' && arg[1] != '-' {
-            // Short flags. Each char after '-' is a flag.
             for r in arg[1:] {
                 def, ok := find_short(spec, r)
                 if !ok {
@@ -49,6 +57,16 @@ parse :: proc(args: []string, spec: Spec) -> (Parsed, Parse_Error, string) {
 find_short :: proc(spec: Spec, r: rune) -> (Flag_Def, bool) {
     for def in spec.flags {
         if def.short == r {
+            return def, true
+        }
+    }
+    return {}, false
+}
+
+@(private)
+find_long :: proc(spec: Spec, name: string) -> (Flag_Def, bool) {
+    for def in spec.flags {
+        if def.long == name {
             return def, true
         }
     }
