@@ -35,3 +35,15 @@ write_string_to_pipe_writes_raw_utf8 :: proc(t: ^testing.T) {
     testing.expect_value(t, rerr, os.ERROR_NONE)
     testing.expect_value(t, string(data), "hi")
 }
+
+@(test)
+write_line_appends_crlf :: proc(t: ^testing.T) {
+    w, path := make_pipe_writer_to_temp(t)
+    defer os.remove(path)
+    _, err := winconsole.write_line(w, "abc")
+    win.CloseHandle(w.handle)
+    testing.expect_value(t, err, winconsole.Error.None)
+    data, rerr := os.read_entire_file_from_path(path, context.allocator)
+    testing.expect_value(t, rerr, os.ERROR_NONE)
+    testing.expect_value(t, string(data), "abc\r\n")
+}
