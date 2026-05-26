@@ -47,3 +47,19 @@ write_line_appends_crlf :: proc(t: ^testing.T) {
     testing.expect_value(t, rerr, os.ERROR_NONE)
     testing.expect_value(t, string(data), "abc\r\n")
 }
+
+@(test)
+hebrew_string_writes_exact_utf8_bytes :: proc(t: ^testing.T) {
+    w, path := make_pipe_writer_to_temp(t)
+    defer os.remove(path)
+    _, err := winconsole.write_string(w, "שלום")
+    win.CloseHandle(w.handle)
+    testing.expect_value(t, err, winconsole.Error.None)
+    data, rerr := os.read_entire_file_from_path(path, context.allocator)
+    testing.expect_value(t, rerr, os.ERROR_NONE)
+    expected := []u8{0xD7, 0xA9, 0xD7, 0x9C, 0xD7, 0x95, 0xD7, 0x9D}
+    testing.expect_value(t, len(data), len(expected))
+    for b, i in data {
+        testing.expect_value(t, b, expected[i])
+    }
+}
