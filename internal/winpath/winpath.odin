@@ -27,6 +27,77 @@ get_cwd_physical :: proc(allocator := context.allocator) -> (path: string, err: 
     return normalize(resolved, allocator)
 }
 
+get_cwd_logical :: proc(allocator := context.allocator) -> (path: string, err: Error) {
+    pwd, perr := read_env_utf16("PWD", context.temp_allocator)
+    if perr != .None || len(pwd) == 0 {
+        return get_cwd_physical(allocator)
+    }
+    if !is_absolute_w(pwd) {
+        return get_cwd_physical(allocator)
+    }
+    if !same_dir(pwd) {
+        return get_cwd_physical(allocator)
+    }
+    return normalize(pwd, allocator)
+}
+
+@(private)
+read_env_utf16 :: proc(name: string, allocator: runtime.Allocator) -> ([]u16, Error) {
+    nm := win.utf8_to_wstring(name, context.temp_allocator)
+    n := win.GetEnvironmentVariableW(nm, nil, 0)
+    if n == 0 {
+        return nil, .Env_Read_Failed
+    }
+    buf := make([]u16, int(n), allocator)
+    got := win.GetEnvironmentVariableW(nm, raw_data(buf), n)
+    if got == 0 {
+        return nil, .Env_Read_Failed
+    }
+    return buf[:got], .None
+}
+
+@(private)
+is_absolute_w :: proc(wpath: []u16) -> bool {
+    if len(wpath) >= 3 {
+        c := wpath[0]
+        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) &&
+           wpath[1] == ':' && wpath[2] == '\\' {
+            return true
+        }
+    }
+    if len(wpath) >= 2 && wpath[0] == '\\' && wpath[1] == '\\' {
+        return true
+    }
+    return false
+}
+
+@(private)
+same_dir :: proc(wpath: []u16) -> bool {
+    z := make([]u16, len(wpath)+1, context.temp_allocator)
+    copy(z, wpath)
+    z[len(wpath)] = 0
+    share: win.DWORD = win.FILE_SHARE_READ | win.FILE_SHARE_WRITE | win.FILE_SHARE_DELETE
+    h1 := win.CreateFileW(
+        win.wstring(raw_data(z)), 0,
+        share, nil, win.OPEN_EXISTING, win.FILE_FLAG_BACKUP_SEMANTICS, nil,
+    )
+    if h1 == win.INVALID_HANDLE do return false
+    defer win.CloseHandle(h1)
+
+    raw, rerr := read_cwd_utf16(context.temp_allocator)
+    if rerr != .None do return false
+    h2 := open_dir_handle(raw)
+    if h2 == win.INVALID_HANDLE do return false
+    defer win.CloseHandle(h2)
+
+    info1, info2: win.BY_HANDLE_FILE_INFORMATION
+    if !win.GetFileInformationByHandle(h1, &info1) do return false
+    if !win.GetFileInformationByHandle(h2, &info2) do return false
+    return info1.dwVolumeSerialNumber == info2.dwVolumeSerialNumber &&
+           info1.nFileIndexHigh       == info2.nFileIndexHigh &&
+           info1.nFileIndexLow        == info2.nFileIndexLow
+}
+
 @(private)
 read_cwd_utf16 :: proc(allocator: runtime.Allocator) -> ([]u16, Error) {
     n := win.GetCurrentDirectoryW(0, nil)
