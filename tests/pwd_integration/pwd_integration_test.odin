@@ -37,3 +37,42 @@ prints_cwd_with_crlf :: proc(t: ^testing.T) {
     trimmed := strings.trim_suffix(line, "\r\n")
     testing.expect(t, strings.equal_fold(trimmed, tmp), "stdout did not match cwd (case-insensitive)")
 }
+
+@(test)
+help_prints_usage_exit_0 :: proc(t: ^testing.T) {
+    tmp_base, _ := os.temp_dir(context.allocator)
+    defer delete(tmp_base)
+    tmp := strings.trim_suffix(tmp_base, "\\")
+    out, _, code := run(t, []string{"--help"}, tmp)
+    testing.expect_value(t, code, 0)
+    testing.expect(t, strings.contains(string(out), "Usage:"), "expected 'Usage:' in help output")
+}
+
+@(test)
+version_prints_string_exit_0 :: proc(t: ^testing.T) {
+    tmp_base, _ := os.temp_dir(context.allocator)
+    defer delete(tmp_base)
+    tmp := strings.trim_suffix(tmp_base, "\\")
+    out, _, code := run(t, []string{"--version"}, tmp)
+    testing.expect_value(t, code, 0)
+    testing.expect(t, strings.has_prefix(string(out), "pwd (winix) "), "expected 'pwd (winix) ...' prefix")
+}
+
+@(test)
+unknown_flag_exits_2_with_stderr :: proc(t: ^testing.T) {
+    tmp_base, _ := os.temp_dir(context.allocator)
+    defer delete(tmp_base)
+    tmp := strings.trim_suffix(tmp_base, "\\")
+    _, errb, code := run(t, []string{"-X"}, tmp)
+    testing.expect_value(t, code, 2)
+    testing.expect(t, strings.contains(string(errb), "unknown option"), "expected 'unknown option' on stderr")
+}
+
+@(test)
+extra_arg_exits_2 :: proc(t: ^testing.T) {
+    tmp_base, _ := os.temp_dir(context.allocator)
+    defer delete(tmp_base)
+    tmp := strings.trim_suffix(tmp_base, "\\")
+    _, _, code := run(t, []string{"foo"}, tmp)
+    testing.expect_value(t, code, 2)
+}
