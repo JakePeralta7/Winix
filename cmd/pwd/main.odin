@@ -33,6 +33,12 @@ main :: proc() {
     out := winconsole.stdout()
     errw := winconsole.stderr()
 
+    if perr != .None {
+        winconsole.write_string(errw, "pwd: unknown option: ")
+        winconsole.write_string(errw, tok)
+        winconsole.write_string(errw, "\r\nTry 'pwd --help'.\r\n")
+        os.exit(2)
+    }
     if help {
         winconsole.write_string(out, USAGE)
         os.exit(0)
@@ -40,12 +46,6 @@ main :: proc() {
     if version {
         winconsole.write_line(out, "pwd (winix) " + VERSION)
         os.exit(0)
-    }
-    if perr != .None {
-        winconsole.write_string(errw, "pwd: unknown option: ")
-        winconsole.write_string(errw, tok)
-        winconsole.write_string(errw, "\r\nTry 'pwd --help'.\r\n")
-        os.exit(2)
     }
     if len(parsed.rest) > 0 {
         winconsole.write_string(errw, "pwd: too many arguments\r\n")
