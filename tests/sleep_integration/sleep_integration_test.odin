@@ -52,7 +52,7 @@ invalid_interval_exits_1 :: proc(t: ^testing.T) {
 @(test)
 negative_interval_exits_1 :: proc(t: ^testing.T) {
 	_, _, code := run(t, []string{"-1"})
-	testing.expect_value(t, code, 1)
+	testing.expect_value(t, code, 2)
 }
 
 @(test)

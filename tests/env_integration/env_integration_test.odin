@@ -50,10 +50,10 @@ output_has_name_equals_value_format :: proc(t: ^testing.T) {
 
 @(test)
 unset_flag_excludes_variable :: proc(t: ^testing.T) {
-	out, _, code := run(t, []string{"-u", "PATH"})
+	out, _, code := run(t, []string{"-u", "COMPUTERNAME"})
 	defer delete(out)
 	testing.expect_value(t, code, 0)
-	testing.expect(t, !strings.contains(string(out), "PATH="), "PATH should be excluded")
+	testing.expect(t, !strings.contains(string(out), "COMPUTERNAME="), "COMPUTERNAME should be excluded")
 }
 
 @(test)
