@@ -16,10 +16,13 @@ call .\build.bat
 if errorlevel 1 exit /b 1
 
 echo Running integration tests...
-odin test tests\pwd_integration
-if errorlevel 1 (
-    echo Integration tests failed
-    exit /b 1
+for %%P in (pwd_integration ls_integration rm_integration) do (
+    echo   tests\%%P
+    odin test tests\%%P
+    if errorlevel 1 (
+        echo Integration tests failed: %%P
+        exit /b 1
+    )
 )
 
 echo All tests passed.
