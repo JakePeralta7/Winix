@@ -1,4 +1,4 @@
-package main
+﻿package main
 
 import "core:fmt"
 import "core:os"
@@ -6,7 +6,6 @@ import "core:slice"
 import "core:strings"
 import "../../internal/cliflag"
 import "../../internal/winconsole"
-import "../../internal/winls"
 
 VERSION :: #config(VERSION, "dev")
 
@@ -70,7 +69,7 @@ main :: proc() {
 			winconsole.write_string(out, ":\r\n")
 		}
 
-		entries, lerr := winls.list_dir(path, all)
+		entries, lerr := list_dir(path, all)
 		if lerr != .None {
 			winconsole.write_string(errw, "ls: cannot access '")
 			winconsole.write_string(errw, path)
@@ -78,10 +77,10 @@ main :: proc() {
 			exit_code = 1
 			continue
 		}
-		defer winls.free_entries(entries)
+		defer free_entries(entries)
 
 		// Sort: . first, .. second, then case-insensitive alpha
-		slice.sort_by(entries, proc(a, b: winls.Entry) -> bool {
+		slice.sort_by(entries, proc(a, b: Entry) -> bool {
 			if a.name == "." { return true }
 			if b.name == "." { return false }
 			if a.name == ".." { return true }
@@ -101,14 +100,14 @@ main :: proc() {
 	os.exit(exit_code)
 }
 
-print_short :: proc(out: winconsole.Writer, entries: []winls.Entry) {
+print_short :: proc(out: winconsole.Writer, entries: []Entry) {
 	for e in entries {
 		winconsole.write_string(out, e.name)
 		winconsole.write_string(out, "\r\n")
 	}
 }
 
-print_long :: proc(out: winconsole.Writer, entries: []winls.Entry) {
+print_long :: proc(out: winconsole.Writer, entries: []Entry) {
 	// Compute max size column width for right-alignment
 	max_size_w := 1
 	for e in entries {

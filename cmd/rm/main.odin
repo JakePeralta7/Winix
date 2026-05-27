@@ -1,9 +1,8 @@
-package main
+﻿package main
 
 import "core:os"
 import "../../internal/cliflag"
 import "../../internal/winconsole"
-import "../../internal/winrm"
 
 VERSION :: #config(VERSION, "dev")
 
@@ -52,13 +51,21 @@ main :: proc() {
 	}
 
 	paths := parsed.rest
+
+	// When no paths are given as arguments, try to read them from stdin (pipe).
+	if len(paths) == 0 {
+		if stdin_lines := winconsole.read_stdin_lines(); stdin_lines != nil {
+			paths = stdin_lines
+		}
+	}
+
 	if len(paths) == 0 {
 		winconsole.write_string(errw, "rm: missing operand\r\nTry 'rm --help'.\r\n")
 		os.exit(1)
 	}
 
 	// notify is called by winrm after each successful deletion when -v is set.
-	notify: winrm.Notify_Proc = nil
+	notify: Notify_Proc = nil
 	if verbose {
 		notify = proc(path: string, is_dir: bool) {
 			w := winconsole.stdout()
@@ -74,11 +81,11 @@ main :: proc() {
 
 	exit_code := 0
 	for path in paths {
-		err: winrm.Error
+		err: Error
 		if recursive {
-			err = winrm.remove_all(path, notify)
+			err = remove_all(path, notify)
 		} else {
-			err = winrm.remove(path, notify)
+			err = remove(path, notify)
 		}
 
 		if err == .None { continue }
@@ -89,7 +96,7 @@ main :: proc() {
 	os.exit(exit_code)
 }
 
-report_error :: proc(errw: winconsole.Writer, path: string, err: winrm.Error) {
+report_error :: proc(errw: winconsole.Writer, path: string, err: Error) {
 	winconsole.write_string(errw, "rm: cannot remove '")
 	winconsole.write_string(errw, path)
 	winconsole.write_string(errw, "': ")
@@ -97,7 +104,7 @@ report_error :: proc(errw: winconsole.Writer, path: string, err: winrm.Error) {
 	winconsole.write_string(errw, "\r\n")
 }
 
-message_for :: proc(err: winrm.Error) -> string {
+message_for :: proc(err: Error) -> string {
 	switch err {
 	case .None:          return ""
 	case .Not_Found:     return "No such file or directory"

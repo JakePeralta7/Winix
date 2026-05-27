@@ -1,11 +1,11 @@
-// Package winpkill enumerates running processes and terminates those whose
+﻿// package main enumerates running processes and terminates those whose
 // executable filename matches a given pattern.
 //
 // kill_by_name uses a Toolhelp32 snapshot to enumerate processes atomically.
 // Matching is always case-insensitive. Pass Match_Opts.exact = true to require
 // a full-name match instead of a substring match.
 // Pass Match_Opts.dry_run = true to collect results without actually killing.
-package winpkill
+package main
 
 import "core:strings"
 import win "core:sys/windows"
