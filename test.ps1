@@ -17,7 +17,12 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 Write-Host "Running integration tests..."
 foreach ($pkg in @('pwd_integration', 'ls_integration', 'rm_integration', 'which_integration', 'pkill_integration')) {
     Write-Host "  tests/$pkg"
-    odin test "tests/$pkg"
+    if ($pkg -eq 'pkill_integration') {
+        # pkill integration tests spawn/kill real processes and can interfere when run in parallel.
+        odin test "tests/$pkg" -define:ODIN_TEST_THREADS=1
+    } else {
+        odin test "tests/$pkg"
+    }
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Integration tests failed: $pkg"
         exit $LASTEXITCODE
