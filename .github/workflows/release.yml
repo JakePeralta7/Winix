@@ -19,12 +19,19 @@ jobs:
           fetch-depth: 0
       - name: Set up Odin
         shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          $release = Invoke-RestMethod "https://api.github.com/repos/odin-lang/Odin/releases/latest"
+          $headers = @{
+            Authorization = "Bearer $env:GITHUB_TOKEN"
+            Accept        = "application/vnd.github+json"
+          }
+
+          $release = Invoke-RestMethod "https://api.github.com/repos/odin-lang/Odin/releases/latest" -Headers $headers
           $asset = $release.assets | Where-Object { $_.name -match '^odin-windows-amd64-.*\.zip$' } | Select-Object -First 1
           if (-not $asset) { throw "Could not find a Windows Odin release asset." }
 
-          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile odin.zip
+          Invoke-WebRequest -Uri $asset.browser_download_url -Headers $headers -OutFile odin.zip
           Expand-Archive -Path odin.zip -DestinationPath "$env:RUNNER_TEMP\odin" -Force
 
           $odinExe = Get-ChildItem "$env:RUNNER_TEMP\odin" -Recurse -Filter odin.exe | Select-Object -First 1
