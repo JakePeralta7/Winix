@@ -25,6 +25,33 @@ run :: proc(t: ^testing.T, args: []string, cwd: string) -> (stdout: []byte, stde
     return out, errb, state.exit_code
 }
 
+@(private="file")
+normalize_path_for_compare :: proc(path: string) -> string {
+    out := path
+    if strings.has_prefix(out, "\\\\?\\UNC\\") {
+        out = strings.concatenate({"\\\\", out[len("\\\\?\\UNC\\"): ]}, context.temp_allocator)
+    } else if strings.has_prefix(out, "\\\\?\\") {
+        out = out[len("\\\\?\\"):]
+    }
+
+    b := make([]u8, len(out), context.temp_allocator)
+    copy(b, transmute([]u8)out)
+    for i in 0..<len(b) {
+        if b[i] == '/' {
+            b[i] = '\\'
+        }
+    }
+    out = string(b)
+
+    for len(out) > 0 && out[len(out)-1] == '\\' {
+        if len(out) == 3 && out[1] == ':' && out[2] == '\\' {
+            break
+        }
+        out = out[:len(out)-1]
+    }
+    return out
+}
+
 @(test)
 prints_cwd_with_crlf :: proc(t: ^testing.T) {
     tmp_base, _ := os.temp_dir(context.allocator)
@@ -35,7 +62,9 @@ prints_cwd_with_crlf :: proc(t: ^testing.T) {
     line := string(out)
     testing.expect(t, strings.has_suffix(line, "\r\n"), "expected CRLF terminator")
     trimmed := strings.trim_suffix(line, "\r\n")
-    testing.expect(t, strings.equal_fold(trimmed, tmp), "stdout did not match cwd (case-insensitive)")
+    actual := normalize_path_for_compare(trimmed)
+    expected := normalize_path_for_compare(tmp)
+    testing.expect(t, strings.equal_fold(actual, expected), "stdout did not match cwd (case-insensitive)")
 }
 
 @(test)
