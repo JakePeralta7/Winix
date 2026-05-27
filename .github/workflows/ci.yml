@@ -2,14 +2,14 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ '**' ]
     paths:
       - '**.odin'
       - 'VERSION'
       - 'build.*'
       - '.github/workflows/**'
   pull_request:
-    branches: [ main ]
+    branches: [ '**' ]
     paths:
       - '**.odin'
       - 'VERSION'
@@ -17,15 +17,29 @@ on:
       - '.github/workflows/**'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-test:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - name: Set up Odin
-        uses: odin-lang/setup-odin@v1
-        with:
-          version: latest
+        shell: pwsh
+        run: |
+          $release = Invoke-RestMethod "https://api.github.com/repos/odin-lang/Odin/releases/latest"
+          $asset = $release.assets | Where-Object { $_.name -match '^odin-windows-amd64-.*\.zip$' } | Select-Object -First 1
+          if (-not $asset) { throw "Could not find a Windows Odin release asset." }
+
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile odin.zip
+          Expand-Archive -Path odin.zip -DestinationPath "$env:RUNNER_TEMP\odin" -Force
+
+          $odinExe = Get-ChildItem "$env:RUNNER_TEMP\odin" -Recurse -Filter odin.exe | Select-Object -First 1
+          if (-not $odinExe) { throw "odin.exe not found after extraction." }
+
+          "$($odinExe.DirectoryName)" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          odin version
       - name: Build all
         run: ./build.ps1
         shell: pwsh
@@ -34,29 +48,64 @@ jobs:
         shell: pwsh
 
   release:
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && github.event.head_commit.modified && contains(github.event.head_commit.modified, 'VERSION')
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     needs: build-test
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Detect VERSION change
+        id: version_change
+        shell: pwsh
+        run: |
+          $before = "${{ github.event.before }}"
+          $after = "${{ github.sha }}"
+          $zero = "0000000000000000000000000000000000000000"
+
+          if ($before -eq $zero) {
+            $files = git show --pretty='' --name-only $after
+          } else {
+            $files = git diff --name-only $before $after
+          }
+
+          $changed = ($files | Where-Object { $_ -eq 'VERSION' } | Select-Object -First 1)
+          if ($changed) {
+            "changed=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          } else {
+            "changed=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          }
       - name: Set up Odin
-        uses: odin-lang/setup-odin@v1
-        with:
-          version: latest
+        if: steps.version_change.outputs.changed == 'true'
+        shell: pwsh
+        run: |
+          $release = Invoke-RestMethod "https://api.github.com/repos/odin-lang/Odin/releases/latest"
+          $asset = $release.assets | Where-Object { $_.name -match '^odin-windows-amd64-.*\.zip$' } | Select-Object -First 1
+          if (-not $asset) { throw "Could not find a Windows Odin release asset." }
+
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile odin.zip
+          Expand-Archive -Path odin.zip -DestinationPath "$env:RUNNER_TEMP\odin" -Force
+
+          $odinExe = Get-ChildItem "$env:RUNNER_TEMP\odin" -Recurse -Filter odin.exe | Select-Object -First 1
+          if (-not $odinExe) { throw "odin.exe not found after extraction." }
+
+          "$($odinExe.DirectoryName)" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          odin version
+      - name: Read version
+        if: steps.version_change.outputs.changed == 'true'
+        id: version_meta
+        shell: pwsh
+        run: |
+          $version = (Get-Content -Raw VERSION).Trim()
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
       - name: Build all
+        if: steps.version_change.outputs.changed == 'true'
         run: ./build.ps1
         shell: pwsh
       - name: Create Release
-        id: create_release
+        if: steps.version_change.outputs.changed == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ github.sha }}
-          name: Release ${{ github.sha }}
+          tag_name: v${{ steps.version_meta.outputs.version }}
+          name: v${{ steps.version_meta.outputs.version }}
           body: |
-            Automated release for commit ${{ github.sha }}
-      - name: Upload binaries
-        uses: softprops/action-gh-release@v2
-        with:
           files: bin/*.exe
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            Automated release for VERSION ${{ steps.version_meta.outputs.version }}
