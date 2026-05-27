@@ -39,6 +39,7 @@ jobs:
           if (-not $odinExe) { throw "odin.exe not found after extraction." }
 
           "$($odinExe.DirectoryName)" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          $env:PATH = "$($odinExe.DirectoryName);$env:PATH"
           odin version
       - name: Build all
         run: ./build.ps1
@@ -88,6 +89,7 @@ jobs:
           if (-not $odinExe) { throw "odin.exe not found after extraction." }
 
           "$($odinExe.DirectoryName)" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          $env:PATH = "$($odinExe.DirectoryName);$env:PATH"
           odin version
       - name: Read version
         if: steps.version_change.outputs.changed == 'true'
