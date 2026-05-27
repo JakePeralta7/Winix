@@ -49,6 +49,11 @@ jobs:
         run: |
           $version = (Get-Content -Raw VERSION).Trim()
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+      - name: Package binaries
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version_meta.outputs.version }}"
+          Compress-Archive -Path bin\*.exe -DestinationPath "bin\winix-$version-windows-amd64.zip"
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
@@ -56,4 +61,4 @@ jobs:
           name: v${{ steps.version_meta.outputs.version }}
           body: |
             Automated release for VERSION ${{ steps.version_meta.outputs.version }}
-          files: bin/*.exe
+          files: bin/winix-${{ steps.version_meta.outputs.version }}-windows-amd64.zip
