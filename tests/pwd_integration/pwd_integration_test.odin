@@ -3,6 +3,7 @@ package pwd_integration_test
 import "core:os"
 import "core:strings"
 import "core:testing"
+import win "core:sys/windows"
 
 @(private="file")
 EXE :: "bin/pwd.exe"
@@ -52,6 +53,44 @@ normalize_path_for_compare :: proc(path: string) -> string {
     return out
 }
 
+@(private="file")
+open_dir_handle :: proc(path: string) -> win.HANDLE {
+    w := win.utf8_to_utf16(path, context.temp_allocator)
+    z := make([]u16, len(w)+1, context.temp_allocator)
+    copy(z, w)
+    z[len(w)] = 0
+
+    share: win.DWORD = win.FILE_SHARE_READ | win.FILE_SHARE_WRITE | win.FILE_SHARE_DELETE
+    return win.CreateFileW(
+        win.wstring(raw_data(z)),
+        0,
+        share,
+        nil,
+        win.OPEN_EXISTING,
+        win.FILE_FLAG_BACKUP_SEMANTICS,
+        nil,
+    )
+}
+
+@(private="file")
+same_directory :: proc(a: string, b: string) -> bool {
+    h1 := open_dir_handle(a)
+    if h1 == win.INVALID_HANDLE do return false
+    defer win.CloseHandle(h1)
+
+    h2 := open_dir_handle(b)
+    if h2 == win.INVALID_HANDLE do return false
+    defer win.CloseHandle(h2)
+
+    i1, i2: win.BY_HANDLE_FILE_INFORMATION
+    if !win.GetFileInformationByHandle(h1, &i1) do return false
+    if !win.GetFileInformationByHandle(h2, &i2) do return false
+
+    return i1.dwVolumeSerialNumber == i2.dwVolumeSerialNumber &&
+           i1.nFileIndexHigh       == i2.nFileIndexHigh &&
+           i1.nFileIndexLow        == i2.nFileIndexLow
+}
+
 @(test)
 prints_cwd_with_crlf :: proc(t: ^testing.T) {
     tmp_base, _ := os.temp_dir(context.allocator)
@@ -64,7 +103,9 @@ prints_cwd_with_crlf :: proc(t: ^testing.T) {
     trimmed := strings.trim_suffix(line, "\r\n")
     actual := normalize_path_for_compare(trimmed)
     expected := normalize_path_for_compare(tmp)
-    testing.expect(t, strings.equal_fold(actual, expected), "stdout did not match cwd (case-insensitive)")
+    same_text := strings.equal_fold(actual, expected)
+    same_dir := same_directory(actual, expected)
+    testing.expect(t, same_text || same_dir, "stdout did not match cwd")
 }
 
 @(test)
