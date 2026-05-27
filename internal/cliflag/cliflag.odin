@@ -1,15 +1,27 @@
+// Package cliflag provides a minimal command-line flag parser.
+//
+// Callers describe expected flags with a Spec, then call parse to walk os.args.
+// Unrecognised flags cause parse to return immediately with .Unknown_Flag and
+// the offending token; all valid flags set their target pointer in place.
+// Positional arguments (non-flag tokens) are returned in Parsed.rest.
 package cliflag
 
+// Parse_Error is the error class returned by parse.
 Parse_Error :: enum {
     None,
     Unknown_Flag,
     Bad_Combo,  // reserved; not yet emitted
 }
 
+// Flag_Kind selects how a flag's value is applied when it appears.
 Flag_Kind :: enum {
+    // Bool_Last_Wins writes value_if_set to the target every time the flag
+    // appears, so the last occurrence wins (e.g. -L -P leaves -P in effect).
     Bool_Last_Wins,
 }
 
+// Flag_Def declares one recognised flag.
+// Set short to 0 or long to "" to make a flag short-only or long-only.
 Flag_Def :: struct {
     long:         string, // "" if short-only
     short:        rune,   // 0 if long-only
@@ -18,14 +30,22 @@ Flag_Def :: struct {
     value_if_set: bool,   // value written to target^ when the flag appears
 }
 
+// Spec is the complete description of a command's flags.
 Spec :: struct {
     flags: []Flag_Def,
 }
 
+// Parsed holds the output of a successful (or partial) parse.
 Parsed :: struct {
-    rest: []string, // positional args (slice into args)
+    rest: []string, // positional args that were not consumed as flags
 }
 
+// parse walks args left-to-right and applies matching Flag_Defs from spec.
+//
+// On success it returns (Parsed, .None, "").
+// On the first unrecognised flag it returns the partial Parsed, .Unknown_Flag,
+// and the offending token (e.g. "--foo" or "-z").
+// rest is allocated from context.temp_allocator.
 parse :: proc(args: []string, spec: Spec) -> (Parsed, Parse_Error, string) {
     rest := make([dynamic]string, 0, len(args), context.temp_allocator)
     for arg in args {

@@ -1,3 +1,7 @@
+// Package winls enumerates directory contents using the Win32 Find API.
+//
+// list_dir returns a slice of Entry values, one per item found.
+// Callers must release the slice with free_entries when done.
 package winls
 
 import "core:strings"
@@ -10,11 +14,13 @@ foreign kernel32 {
 	FileTimeToLocalFileTime :: proc(lpFileTime: ^win.FILETIME, lpLocalFileTime: ^win.FILETIME) -> win.BOOL ---
 }
 
+// Error classifies failures returned by list_dir.
 Error :: enum {
 	None,
 	Find_Failed,
 }
 
+// Entry holds the metadata for one directory item.
 Entry :: struct {
 	name:        string,
 	is_dir:      bool,
@@ -64,6 +70,7 @@ list_dir :: proc(path: string, all: bool, allocator := context.allocator) -> (en
 	return result[:], .None
 }
 
+// free_entries releases all memory allocated by list_dir.
 free_entries :: proc(entries: []Entry, allocator := context.allocator) {
 	for e in entries {
 		delete(e.name, allocator)

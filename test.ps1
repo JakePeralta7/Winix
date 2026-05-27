@@ -15,7 +15,7 @@ Write-Host "Building binaries..."
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host "Running integration tests..."
-foreach ($pkg in @('pwd_integration', 'ls_integration', 'rm_integration', 'which_integration')) {
+foreach ($pkg in @('pwd_integration', 'ls_integration', 'rm_integration', 'which_integration', 'pkill_integration')) {
     Write-Host "  tests/$pkg"
     odin test "tests/$pkg"
     if ($LASTEXITCODE -ne 0) {

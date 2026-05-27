@@ -1,3 +1,9 @@
+// Package winrm removes files and directory trees using the Win32 API.
+//
+// remove deletes a single file.
+// remove_all deletes a file or recursively empties and removes a directory tree.
+// An optional Notify_Proc is called after each successful deletion when the
+// caller passes -v / --verbose.
 package winrm
 
 import "base:runtime"

@@ -1,9 +1,20 @@
+// Package winpath resolves the current working directory on Windows.
+//
+// Two modes are supported:
+//   - Logical  (get_cwd_logical):  honours %PWD% when it refers to the same
+//     inode as the kernel cwd, mirroring bash/POSIX behaviour.
+//   - Physical (get_cwd_physical): always calls GetCurrentDirectoryW and then
+//     resolves reparse points via GetFinalPathNameByHandleW.
+//
+// All returned paths use backslash separators, an uppercase drive letter, and
+// no trailing backslash (except for a root such as C:\ or \\server\share\).
 package winpath
 
 import "base:runtime"
 import "core:strings"
 import win "core:sys/windows"
 
+// Error classifies failures returned by this package.
 Error :: enum {
     None,
     GetCwd_Failed,
@@ -13,6 +24,10 @@ Error :: enum {
     Encoding_Failed,
 }
 
+// get_cwd_physical returns the physical current directory by resolving
+// symlinks and junctions with GetFinalPathNameByHandleW.
+// Falls back to GetCurrentDirectoryW if the handle cannot be obtained.
+// The caller owns the returned string.
 get_cwd_physical :: proc(allocator := context.allocator) -> (path: string, err: Error) {
     raw := read_cwd_utf16(context.temp_allocator) or_return
     h := open_dir_handle(raw)
@@ -27,6 +42,11 @@ get_cwd_physical :: proc(allocator := context.allocator) -> (path: string, err: 
     return normalize(resolved, allocator)
 }
 
+// get_cwd_logical returns the logical current directory.
+// It accepts %PWD% when the variable is set, absolute, and refers to the same
+// filesystem object as the kernel cwd (same volume serial and file index).
+// Falls back to get_cwd_physical when any condition fails.
+// The caller owns the returned string.
 get_cwd_logical :: proc(allocator := context.allocator) -> (path: string, err: Error) {
     pwd, perr := read_env_utf16("PWD", context.temp_allocator)
     if perr != .None || len(pwd) == 0 {
