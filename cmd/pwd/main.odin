@@ -5,7 +5,7 @@ import "../../internal/cliflag"
 import "../../internal/winconsole"
 import "../../internal/winpath"
 
-VERSION :: "0.1.0"
+VERSION :: #config(VERSION, "dev")
 
 USAGE :: `Usage: pwd [-L | -P] [--help] [--version]
 Print the current working directory.

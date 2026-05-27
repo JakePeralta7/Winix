@@ -8,7 +8,7 @@ import "../../internal/cliflag"
 import "../../internal/winconsole"
 import "../../internal/winls"
 
-VERSION :: "0.1.0"
+VERSION :: #config(VERSION, "dev")
 
 USAGE :: `Usage: ls [-l] [-a] [-1] [--help] [--version] [path ...]
 List directory contents.

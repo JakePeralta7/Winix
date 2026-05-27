@@ -5,7 +5,7 @@ import "../../internal/cliflag"
 import "../../internal/winconsole"
 import "../../internal/winrm"
 
-VERSION :: "0.1.0"
+VERSION :: #config(VERSION, "dev")
 
 USAGE :: `Usage: rm [-r] [-f] [-v] [--help] [--version] file ...
 Remove files or directories.

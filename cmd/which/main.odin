@@ -5,7 +5,7 @@ import "../../internal/cliflag"
 import "../../internal/winconsole"
 import "../../internal/winwhich"
 
-VERSION :: "0.1.0"
+VERSION :: #config(VERSION, "dev")
 
 USAGE :: `Usage: which [-a] [--help] [--version] name ...
 Locate a command by searching PATH.

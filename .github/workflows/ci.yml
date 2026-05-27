@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '**.odin'
+      - 'VERSION'
+      - 'build.*'
+      - '.github/workflows/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '**.odin'
+      - 'VERSION'
+      - 'build.*'
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+jobs:
+  build-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Odin
+        uses: odin-lang/setup-odin@v1
+        with:
+          version: latest
+      - name: Build all
+        run: ./build.ps1
+        shell: pwsh
+      - name: Run tests
+        run: ./test.ps1
+        shell: pwsh
+
+  release:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && github.event.head_commit.modified && contains(github.event.head_commit.modified, 'VERSION')
+    needs: build-test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Odin
+        uses: odin-lang/setup-odin@v1
+        with:
+          version: latest
+      - name: Build all
+        run: ./build.ps1
+        shell: pwsh
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.sha }}
+          name: Release ${{ github.sha }}
+          body: |
+            Automated release for commit ${{ github.sha }}
+      - name: Upload binaries
+        uses: softprops/action-gh-release@v2
+        with:
+          files: bin/*.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -6,7 +6,7 @@ import "../../internal/cliflag"
 import "../../internal/winconsole"
 import "../../internal/winpkill"
 
-VERSION :: "0.1.0"
+VERSION :: #config(VERSION, "dev")
 
 USAGE :: `Usage: pkill [-x] [-n] [-v] [--help] [--version] pattern ...
 Kill processes by name pattern.
