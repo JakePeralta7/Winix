@@ -1,17 +1,14 @@
-// Package winrm removes files and directory trees using the Win32 API.
+﻿// package main removes files and directory trees using the Win32 API.
 //
 // remove deletes a single file.
 // remove_all deletes a file or recursively empties and removes a directory tree.
 // An optional Notify_Proc is called after each successful deletion when the
 // caller passes -v / --verbose.
-package winrm
+package main
 
 import "base:runtime"
-import "core:strings"
 import win "core:sys/windows"
-
-// INVALID_FILE_ATTRS is the sentinel returned by GetFileAttributesW on failure.
-INVALID_FILE_ATTRS :: win.DWORD(0xFFFF_FFFF)
+import "../../internal/winio"
 
 Error :: enum {
 	None,
@@ -33,7 +30,7 @@ Notify_Proc :: #type proc(path: string, is_dir: bool)
 stat :: proc(path: string) -> (Kind, Error) {
 	wpath := win.utf8_to_wstring(path, context.temp_allocator)
 	attrs := win.GetFileAttributesW(wpath)
-	if attrs == INVALID_FILE_ATTRS {
+	if attrs == winio.INVALID_FILE_ATTRS {
 		ec := win.GetLastError()
 		if ec == win.ERROR_FILE_NOT_FOUND || ec == win.ERROR_PATH_NOT_FOUND {
 			return .Not_Found, .None
@@ -103,13 +100,7 @@ win_err :: proc(ec: win.DWORD) -> Error {
 @(private)
 remove_dir_recursive :: proc(path: string, notify: Notify_Proc, allocator: runtime.Allocator) -> Error {
 	// Build the glob pattern used to enumerate the directory.
-	last := path[len(path)-1]
-	pattern: string
-	if last == '\\' || last == '/' {
-		pattern = strings.concatenate({path, "*"}, context.temp_allocator)
-	} else {
-		pattern = strings.concatenate({path, "\\*"}, context.temp_allocator)
-	}
+	pattern := winio.join_path(path, "*", context.temp_allocator)
 	wpattern := win.utf8_to_wstring(pattern, context.temp_allocator)
 
 	fd: win.WIN32_FIND_DATAW
@@ -129,12 +120,7 @@ remove_dir_recursive :: proc(path: string, notify: Notify_Proc, allocator: runti
 			}
 			name, nerr := win.utf16_to_utf8(fd.cFileName[:nlen], context.temp_allocator)
 			if nerr == nil && name != "." && name != ".." {
-				child: string
-				if last == '\\' || last == '/' {
-					child = strings.concatenate({path, name}, allocator)
-				} else {
-					child = strings.concatenate({path, "\\", name}, allocator)
-				}
+				child := winio.join_path(path, name, allocator)
 				defer delete(child, allocator)
 
 				is_dir := (fd.dwFileAttributes & win.FILE_ATTRIBUTE_DIRECTORY) != 0

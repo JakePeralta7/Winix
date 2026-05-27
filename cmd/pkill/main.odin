@@ -1,10 +1,9 @@
-package main
+﻿package main
 
 import "core:fmt"
 import "core:os"
 import "../../internal/cliflag"
 import "../../internal/winconsole"
-import "../../internal/winpkill"
 
 VERSION :: #config(VERSION, "dev")
 
@@ -53,7 +52,15 @@ main :: proc() {
 		winconsole.write_line(out, "pkill (winix) " + VERSION)
 		os.exit(0)
 	}
-	if len(parsed.rest) == 0 {
+	patterns := parsed.rest
+
+	if len(patterns) == 0 {
+		if stdin_lines := winconsole.read_stdin_lines(); stdin_lines != nil {
+			patterns = stdin_lines
+		}
+	}
+
+	if len(patterns) == 0 {
 		winconsole.write_string(errw, "pkill: missing operand\r\nTry 'pkill --help'.\r\n")
 		os.exit(1)
 	}
@@ -63,13 +70,13 @@ main :: proc() {
 		verbose = true
 	}
 
-	opts   := winpkill.Match_Opts{exact = exact, dry_run = dry_run}
+	opts   := Match_Opts{exact = exact, dry_run = dry_run}
 	action := "would kill" if dry_run else "killed"
 
 	any_matched := false
-	for pattern in parsed.rest {
-		results, rerr := winpkill.kill_by_name(pattern, opts)
-		defer winpkill.free_results(results)
+	for pattern in patterns {
+		results, rerr := kill_by_name(pattern, opts)
+		defer free_results(results)
 
 		if rerr == .Snapshot_Failed {
 			winconsole.write_string(errw, "pkill: cannot enumerate processes\r\n")

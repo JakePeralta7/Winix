@@ -1,11 +1,11 @@
-// Package winls enumerates directory contents using the Win32 Find API.
+﻿// package main enumerates directory contents using the Win32 Find API.
 //
 // list_dir returns a slice of Entry values, one per item found.
 // Callers must release the slice with free_entries when done.
-package winls
+package main
 
-import "core:strings"
 import win "core:sys/windows"
+import "../../internal/winio"
 
 foreign import kernel32 "system:Kernel32.lib"
 
@@ -40,13 +40,7 @@ Entry :: struct {
 // The caller must free the result with free_entries.
 list_dir :: proc(path: string, all: bool, allocator := context.allocator) -> (entries: []Entry, err: Error) {
 	p := path if len(path) > 0 else "."
-	last := p[len(p)-1]
-	pattern: string
-	if last == '\\' || last == '/' {
-		pattern = strings.concatenate({p, "*"}, context.temp_allocator)
-	} else {
-		pattern = strings.concatenate({p, "\\*"}, context.temp_allocator)
-	}
+	pattern := winio.join_path(p, "*", context.temp_allocator)
 
 	wpattern := win.utf8_to_wstring(pattern, context.temp_allocator)
 

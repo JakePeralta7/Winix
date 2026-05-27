@@ -90,6 +90,21 @@ At least one path operand is required. Exits 1 if any removal fails, 2 on a usag
 
 ---
 
+### `cat` — concatenate files to stdout
+
+```
+cat [--help] [--version] file ...
+```
+
+| Flag | Description |
+|------|-------------|
+| `--help` | Print usage and exit 0 |
+| `--version` | Print version and exit 0 |
+
+Prints file contents to standard output in operand order. Exits 1 if any file cannot be read, 2 on a usage error.
+
+---
+
 ### `which` — locate a command on PATH
 
 ```
@@ -133,9 +148,11 @@ Winix/
 │   ├── pkill/main.odin
 │   ├── pwd/main.odin
 │   ├── rm/main.odin
+│   ├── cat/main.odin
 │   └── which/main.odin
 ├── internal/                # Shared packages (no cross-internal deps)
 │   ├── cliflag/             # Minimal flag parser
+│   ├── wincat/              # File-to-stdout streaming
 │   ├── winconsole/          # WriteConsoleW / UTF-8 stdout+stderr
 │   ├── winls/               # Directory listing logic
 │   ├── winpath/             # cwd resolution (logical + physical)
@@ -150,6 +167,7 @@ Winix/
 │   ├── pkill_integration/
 │   ├── pwd_integration/
 │   ├── rm_integration/
+│   ├── cat_integration/
 │   └── which_integration/
 ├── bin/                     # Build output (git-ignored)
 ├── build.bat

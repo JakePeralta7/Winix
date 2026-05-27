@@ -1,9 +1,8 @@
-package main
+﻿package main
 
 import "core:os"
 import "../../internal/cliflag"
 import "../../internal/winconsole"
-import "../../internal/winwhich"
 
 VERSION :: #config(VERSION, "dev")
 
@@ -45,15 +44,23 @@ main :: proc() {
 		winconsole.write_line(out, "which (winix) " + VERSION)
 		os.exit(0)
 	}
-	if len(parsed.rest) == 0 {
+	names := parsed.rest
+
+	if len(names) == 0 {
+		if stdin_lines := winconsole.read_stdin_lines(); stdin_lines != nil {
+			names = stdin_lines
+		}
+	}
+
+	if len(names) == 0 {
 		winconsole.write_string(errw, "which: missing operand\r\nTry 'which --help'.\r\n")
 		os.exit(1)
 	}
 
 	exit_code := 0
-	for name in parsed.rest {
-		paths, werr := winwhich.find(name, all)
-		defer winwhich.free_results(paths)
+	for name in names {
+		paths, werr := find(name, all)
+		defer free_results(paths)
 
 		if werr == .Not_Found {
 			winconsole.write_string(errw, name)

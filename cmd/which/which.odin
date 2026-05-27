@@ -1,9 +1,9 @@
-// Package winwhich locates executables by searching %PATH% and the Windows
+﻿// package main locates executables by searching %PATH% and the Windows
 // App Paths registry keys, mirroring the behaviour of the Unix `which` utility.
 //
 // find returns the resolved path(s) with on-disk filename casing.
 // free_results releases the memory returned by find.
-package winwhich
+package main
 
 import "base:runtime"
 import "core:os"

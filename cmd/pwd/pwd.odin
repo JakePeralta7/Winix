@@ -1,4 +1,4 @@
-// Package winpath resolves the current working directory on Windows.
+﻿// package main resolves the current working directory on Windows.
 //
 // Two modes are supported:
 //   - Logical  (get_cwd_logical):  honours %PWD% when it refers to the same
@@ -8,7 +8,7 @@
 //
 // All returned paths use backslash separators, an uppercase drive letter, and
 // no trailing backslash (except for a root such as C:\ or \\server\share\).
-package winpath
+package main
 
 import "base:runtime"
 import "core:strings"

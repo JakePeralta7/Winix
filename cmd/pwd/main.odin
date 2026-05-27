@@ -1,9 +1,8 @@
-package main
+﻿package main
 
 import "core:os"
 import "../../internal/cliflag"
 import "../../internal/winconsole"
-import "../../internal/winpath"
 
 VERSION :: #config(VERSION, "dev")
 
@@ -53,11 +52,11 @@ main :: proc() {
     }
 
     path: string
-    werr: winpath.Error
+    werr: Error
     if physical {
-        path, werr = winpath.get_cwd_physical(context.allocator)
+        path, werr = get_cwd_physical(context.allocator)
     } else {
-        path, werr = winpath.get_cwd_logical(context.allocator)
+        path, werr = get_cwd_logical(context.allocator)
     }
     if werr != .None {
         msg := message_for(werr)
@@ -74,7 +73,7 @@ main :: proc() {
     os.exit(0)
 }
 
-message_for :: proc(e: winpath.Error) -> string {
+message_for :: proc(e: Error) -> string {
     switch e {
     case .None:            return ""
     case .GetCwd_Failed:   return "cannot get current directory"

@@ -7,6 +7,7 @@
 package winconsole
 
 import "base:runtime"
+import "core:strings"
 import win "core:sys/windows"
 
 // Error classifies write failures returned by this package.
@@ -109,4 +110,48 @@ clone_string :: proc(s: string, allocator: runtime.Allocator) -> string {
     bytes := make([]u8, len(s), allocator)
     copy(bytes, transmute([]u8)s)
     return string(bytes)
+}
+
+// read_stdin_lines reads all lines from stdin when stdin is a pipe (not a terminal).
+// Returns nil when stdin is a terminal or when there are no non-empty lines.
+// The returned slice and the strings within it are allocated with
+// context.temp_allocator; they are valid until the temp allocator is reset.
+read_stdin_lines :: proc() -> []string {
+    h := win.GetStdHandle(win.STD_INPUT_HANDLE)
+    if win.GetFileType(h) == win.FILE_TYPE_CHAR {
+        return nil
+    }
+    buf := make([dynamic]u8, 0, 4096, context.temp_allocator)
+    tmp: [4096]u8
+    for {
+        n: win.DWORD
+        if !win.ReadFile(h, &tmp[0], win.DWORD(len(tmp)), &n, nil) || n == 0 {
+            break
+        }
+        append(&buf, ..tmp[:n])
+    }
+    if len(buf) == 0 {
+        return nil
+    }
+    result := make([dynamic]string, 0, 8, context.temp_allocator)
+    s := string(buf[:])
+    for len(s) > 0 {
+        end := strings.index_byte(s, '\n')
+        line: string
+        if end < 0 {
+            line = s
+            s = ""
+        } else {
+            line = s[:end]
+            s = s[end+1:]
+        }
+        line = strings.trim_right(line, "\r")
+        if line != "" {
+            append(&result, line)
+        }
+    }
+    if len(result) == 0 {
+        return nil
+    }
+    return result[:]
 }
