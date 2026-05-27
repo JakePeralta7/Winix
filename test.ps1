@@ -21,7 +21,7 @@ Write-Host "Building binaries..."
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host "Running integration tests..."
-foreach ($pkg in @('pwd_integration', 'ls_integration', 'rm_integration', 'cat_integration', 'which_integration', 'pkill_integration', 'head_integration', 'tail_integration', 'touch_integration', 'mv_integration')) {
+foreach ($pkg in @('pwd_integration', 'ls_integration', 'rm_integration', 'cat_integration', 'which_integration', 'pkill_integration', 'head_integration', 'tail_integration', 'touch_integration', 'mv_integration', 'sleep_integration', 'wc_integration', 'grep_integration', 'df_integration', 'ps_integration', 'env_integration', 'du_integration')) {
     Write-Host "  tests/$pkg"
     if ($pkg -eq 'pkill_integration') {
         # pkill integration tests spawn/kill real processes and can interfere when run in parallel.
