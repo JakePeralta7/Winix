@@ -115,6 +115,10 @@ find_tail_offset :: proc(fh: win.HANDLE, size: i64, n: int) -> (offset: i64, err
 	return 0, .None
 }
 
+// MAX_STDIN_BYTES caps in-memory buffering from stdin to prevent DoS via
+// unbounded heap growth from malicious or excessively large piped input.
+MAX_STDIN_BYTES :: 256 * 1024 * 1024  // 256 MiB
+
 // write_tail_from_stdin buffers all of standard input and copies the last n
 // lines to stdout. Buffering is required because a pipe is not seekable.
 write_tail_from_stdin :: proc(n: int) -> winio.Error {
@@ -133,6 +137,9 @@ write_tail_from_stdin :: proc(n: int) -> winio.Error {
 	for {
 		read: win.DWORD
 		if !win.ReadFile(in_h, rawptr(&tmp[0]), win.DWORD(len(tmp)), &read, nil) || read == 0 {
+			break
+		}
+		if len(data) + int(read) > MAX_STDIN_BYTES {
 			break
 		}
 		append(&data, ..tmp[:read])

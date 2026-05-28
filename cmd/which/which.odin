@@ -140,6 +140,10 @@ search_app_paths :: proc(name: string, exts: []string, has_ext: bool, all_matche
 // RegGetValueW with RRF_RT_REG_EXPAND_SZ automatically expands %ENV% variables.
 @(private)
 query_app_path :: proc(root: win.HKEY, key_name: string, allocator: runtime.Allocator) -> (path: string, ok: bool) {
+	// Reject names containing path separators to prevent registry key traversal.
+	if strings.contains_any(key_name, `\/`) {
+		return "", false
+	}
 	subkey  := strings.concatenate({APP_PATHS_SUBKEY, `\`, key_name}, context.temp_allocator)
 	wsubkey := win.utf8_to_wstring(subkey, context.temp_allocator)
 

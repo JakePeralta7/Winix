@@ -19,7 +19,7 @@ Error :: enum {
 }
 
 // Kind describes what a path refers to.
-Kind :: enum { File, Directory, Not_Found }
+Kind :: enum { File, Directory, Reparse_Dir, Not_Found }
 
 // Notify_Proc, when non-nil, is called after each successful removal.
 // is_dir is true when the removed item was a directory.
@@ -36,6 +36,12 @@ stat :: proc(path: string) -> (Kind, Error) {
 			return .Not_Found, .None
 		}
 		return .Not_Found, .Remove_Failed
+	}
+	// Check reparse point before directory: a directory symlink/junction has both
+	// FILE_ATTRIBUTE_DIRECTORY and FILE_ATTRIBUTE_REPARSE_POINT set. We must NOT
+	// recurse into it — treat it as an opaque removable object.
+	if attrs & win.FILE_ATTRIBUTE_REPARSE_POINT != 0 && attrs & win.FILE_ATTRIBUTE_DIRECTORY != 0 {
+		return .Reparse_Dir, .None
 	}
 	if attrs & win.FILE_ATTRIBUTE_DIRECTORY != 0 {
 		return .Directory, .None
@@ -54,6 +60,13 @@ remove :: proc(path: string, notify: Notify_Proc = nil) -> Error {
 		return .Not_Found
 	case .Directory:
 		return .Is_Directory
+	case .Reparse_Dir:
+		// Directory symlink/junction: remove the link itself without following it.
+		wpath := win.utf8_to_wstring(path, context.temp_allocator)
+		if !win.RemoveDirectoryW(wpath) {
+			return win_err(win.GetLastError())
+		}
+		if notify != nil { notify(path, true) }
 	case .File:
 		wpath := win.utf8_to_wstring(path, context.temp_allocator)
 		if !win.DeleteFileW(wpath) {
@@ -80,6 +93,13 @@ remove_all :: proc(path: string, notify: Notify_Proc = nil, allocator := context
 			return win_err(win.GetLastError())
 		}
 		if notify != nil { notify(path, false) }
+	case .Reparse_Dir:
+		// Directory symlink/junction: remove the link without recursing into the target.
+		wpath := win.utf8_to_wstring(path, context.temp_allocator)
+		if !win.RemoveDirectoryW(wpath) {
+			return win_err(win.GetLastError())
+		}
+		if notify != nil { notify(path, true) }
 	case .Directory:
 		return remove_dir_recursive(path, notify, allocator)
 	}
@@ -123,9 +143,18 @@ remove_dir_recursive :: proc(path: string, notify: Notify_Proc, allocator: runti
 				child := winio.join_path(path, name, allocator)
 				defer delete(child, allocator)
 
-				is_dir := (fd.dwFileAttributes & win.FILE_ATTRIBUTE_DIRECTORY) != 0
+				is_dir     := (fd.dwFileAttributes & win.FILE_ATTRIBUTE_DIRECTORY)     != 0
+				is_reparse := (fd.dwFileAttributes & win.FILE_ATTRIBUTE_REPARSE_POINT) != 0
 				err: Error
-				if is_dir {
+				if is_dir && is_reparse {
+					// Directory symlink/junction: remove without following the link.
+					wchild := win.utf8_to_wstring(child, context.temp_allocator)
+					if !win.RemoveDirectoryW(wchild) {
+						err = win_err(win.GetLastError())
+					} else if notify != nil {
+						notify(child, true)
+					}
+				} else if is_dir {
 					err = remove_dir_recursive(child, notify, allocator)
 				} else {
 					wchild := win.utf8_to_wstring(child, context.temp_allocator)

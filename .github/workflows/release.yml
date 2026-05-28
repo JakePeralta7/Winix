@@ -14,7 +14,7 @@ jobs:
   release:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
           fetch-depth: 0
       - name: Set up Odin
@@ -22,16 +22,23 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
+          $odinTag    = "dev-2026-05"
+          $odinAsset  = "odin-windows-amd64-$odinTag.zip"
+          $odinSha256 = "27e6021fe240ffc7944e32bc55e48bab868b9873856a5593d66f7f197e7f0562"
+
           $headers = @{
             Authorization = "Bearer $env:GITHUB_TOKEN"
             Accept        = "application/vnd.github+json"
           }
 
-          $release = Invoke-RestMethod "https://api.github.com/repos/odin-lang/Odin/releases/latest" -Headers $headers
-          $asset = $release.assets | Where-Object { $_.name -match '^odin-windows-amd64-.*\.zip$' } | Select-Object -First 1
-          if (-not $asset) { throw "Could not find a Windows Odin release asset." }
+          $downloadUrl = "https://github.com/odin-lang/Odin/releases/download/$odinTag/$odinAsset"
+          Invoke-WebRequest -Uri $downloadUrl -Headers $headers -OutFile odin.zip
 
-          Invoke-WebRequest -Uri $asset.browser_download_url -Headers $headers -OutFile odin.zip
+          $actualHash = (Get-FileHash odin.zip -Algorithm SHA256).Hash.ToLower()
+          if ($actualHash -ne $odinSha256) {
+            throw "Odin zip SHA256 mismatch: expected $odinSha256, got $actualHash"
+          }
+
           Expand-Archive -Path odin.zip -DestinationPath "$env:RUNNER_TEMP\odin" -Force
 
           $odinExe = Get-ChildItem "$env:RUNNER_TEMP\odin" -Recurse -Filter odin.exe | Select-Object -First 1
@@ -49,13 +56,19 @@ jobs:
         run: |
           $version = (Get-Content -Raw VERSION).Trim()
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-      - name: Package binaries
+      - name: Validate version format
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version_meta.outputs.version }}"
+          if ($version -notmatch '^\d+\.\d+\.\d+$') {
+            throw "VERSION '$version' does not match the required format X.Y.Z"
+          }
         shell: pwsh
         run: |
           $version = "${{ steps.version_meta.outputs.version }}"
           Compress-Archive -Path bin\*.exe -DestinationPath "bin\winix-$version-windows-amd64.zip"
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65  # v2
         with:
           tag_name: v${{ steps.version_meta.outputs.version }}
           name: v${{ steps.version_meta.outputs.version }}

@@ -79,6 +79,9 @@ kill_by_name :: proc(pattern: string, opts: Match_Opts, allocator := context.all
 				}
 
 				if !opts.dry_run {
+					// NOTE: TOCTOU race — the PID obtained from the Toolhelp32 snapshot
+					// may be reused by a different process by the time OpenProcess runs.
+					// This is an inherent limitation of the Windows process model.
 					h := win.OpenProcess(win.PROCESS_TERMINATE, false, pid)
 					if h == nil {
 						r.err = .Access_Denied

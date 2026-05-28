@@ -107,6 +107,9 @@ write_all :: proc(h: win.HANDLE, data: []u8) -> bool {
 // If dir already ends with a separator, no extra separator is added.
 // The result is allocated with allocator.
 join_path :: proc(dir, name: string, allocator := context.allocator) -> string {
+	if len(dir) == 0 {
+		return strings.clone(name, allocator)
+	}
 	last := dir[len(dir)-1]
 	if last == '\\' || last == '/' {
 		return strings.concatenate({dir, name}, allocator)

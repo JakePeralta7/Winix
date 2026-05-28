@@ -112,6 +112,11 @@ clone_string :: proc(s: string, allocator: runtime.Allocator) -> string {
     return string(bytes)
 }
 
+// MAX_STDIN_BYTES is the upper bound on bytes buffered from stdin.
+// Reading beyond this limit stops silently to prevent DoS via unbounded
+// heap growth from malicious or excessively large piped input.
+MAX_STDIN_BYTES :: 256 * 1024 * 1024  // 256 MiB
+
 // read_stdin_lines reads all lines from stdin when stdin is a pipe (not a terminal).
 // Returns nil when stdin is a terminal or when there are no non-empty lines.
 // The returned slice and the strings within it are allocated with
@@ -126,6 +131,9 @@ read_stdin_lines :: proc() -> []string {
     for {
         n: win.DWORD
         if !win.ReadFile(h, &tmp[0], win.DWORD(len(tmp)), &n, nil) || n == 0 {
+            break
+        }
+        if len(buf) + int(n) > MAX_STDIN_BYTES {
             break
         }
         append(&buf, ..tmp[:n])

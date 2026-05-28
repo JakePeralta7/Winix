@@ -7,6 +7,9 @@ import "core:strings"
 import win "core:sys/windows"
 import "../../internal/winio"
 
+// MAX_INPUT_BYTES caps in-memory buffering to prevent DoS via unbounded heap growth.
+MAX_INPUT_BYTES :: 256 * 1024 * 1024  // 256 MiB
+
 // read_all drains h into a heap-allocated byte slice.
 // The caller must delete the returned slice.
 read_all :: proc(h: win.HANDLE) -> []u8 {
@@ -15,6 +18,9 @@ read_all :: proc(h: win.HANDLE) -> []u8 {
 	for {
 		read: win.DWORD
 		if !win.ReadFile(h, rawptr(raw_data(buf)), win.DWORD(len(buf)), &read, nil) || read == 0 {
+			break
+		}
+		if len(out) + int(read) > MAX_INPUT_BYTES {
 			break
 		}
 		append(&out, ..buf[:read])
