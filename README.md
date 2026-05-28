@@ -139,6 +139,44 @@ pkill [-x] [-n] [-v] [--help] [--version] pattern ...
 
 ---
 
+### `sort` — sort lines of text files
+
+```
+sort [-r] [-u] [-n] [-f] [--help] [--version] [file ...]
+```
+
+| Flag | Description |
+|------|-------------|
+| `-r`, `--reverse` | Reverse the result of comparisons |
+| `-u`, `--unique` | Output only the first of an equal run |
+| `-n`, `--numeric-sort` | Compare according to string numerical value |
+| `-f`, `--ignore-case` | Fold lower case to upper case characters |
+| `--help` | Print usage and exit 0 |
+| `--version` | Print version and exit 0 |
+
+Multiple files are concatenated before sorting. With no files reads from stdin. Exits 1 if any file cannot be read, 2 on a usage error.
+
+---
+
+### `uniq` — filter adjacent matching lines
+
+```
+uniq [-c] [-d] [-u] [-i] [--help] [--version] [file]
+```
+
+| Flag | Description |
+|------|-------------|
+| `-c`, `--count` | Prefix lines by the number of occurrences |
+| `-d`, `--repeated` | Only print lines that appear more than once per group |
+| `-u`, `--unique` | Only print lines that appear exactly once |
+| `-i`, `--ignore-case` | Ignore differences in case when comparing |
+| `--help` | Print usage and exit 0 |
+| `--version` | Print version and exit 0 |
+
+Only adjacent duplicate lines are collapsed; pipe through `sort` first for global deduplication. Accepts at most one file operand. With no file reads from stdin. Exits 1 if the file cannot be read, 2 on a usage error.
+
+---
+
 ## Repository layout
 
 ```

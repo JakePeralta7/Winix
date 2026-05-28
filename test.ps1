@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 
 Write-Host "Running unit tests..."
-foreach ($p in @('cliflag', 'winconsole')) {
+foreach ($p in @('cliflag', 'winconsole', 'pwd_unit')) {
     Write-Host "  tests/$p"
     odin test "tests/$p"
     if ($LASTEXITCODE -ne 0) {
@@ -9,19 +9,13 @@ foreach ($p in @('cliflag', 'winconsole')) {
         exit $LASTEXITCODE
     }
 }
-Write-Host "  cmd/pwd"
-odin test "cmd/pwd"
-if ($LASTEXITCODE -ne 0) {
-    Write-Error "Unit tests failed: cmd/pwd"
-    exit $LASTEXITCODE
-}
 
 Write-Host "Building binaries..."
 & powershell -ExecutionPolicy Bypass -File ./build.ps1
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host "Running integration tests..."
-foreach ($pkg in @('pwd_integration', 'ls_integration', 'rm_integration', 'cat_integration', 'which_integration', 'pkill_integration', 'head_integration', 'tail_integration', 'touch_integration', 'mv_integration', 'sleep_integration', 'wc_integration', 'grep_integration', 'df_integration', 'ps_integration', 'env_integration', 'du_integration')) {
+foreach ($pkg in @('pwd_integration', 'ls_integration', 'rm_integration', 'cat_integration', 'which_integration', 'pkill_integration', 'head_integration', 'tail_integration', 'touch_integration', 'mv_integration', 'sleep_integration', 'wc_integration', 'grep_integration', 'df_integration', 'ps_integration', 'env_integration', 'du_integration', 'sort_integration', 'uniq_integration')) {
     Write-Host "  tests/$pkg"
     if ($pkg -eq 'pkill_integration') {
         # pkill integration tests spawn/kill real processes and can interfere when run in parallel.

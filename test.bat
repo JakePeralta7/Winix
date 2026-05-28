@@ -2,19 +2,13 @@
 setlocal enabledelayedexpansion
 
 echo Running unit tests...
-for %%P in (cliflag winconsole) do (
+for %%P in (cliflag winconsole pwd_unit) do (
     echo   tests\%%P
     odin test tests\%%P
     if errorlevel 1 (
         echo Unit tests failed: %%P
         exit /b 1
     )
-)
-echo   cmd\pwd
-odin test cmd\pwd
-if errorlevel 1 (
-    echo Unit tests failed: cmd\pwd
-    exit /b 1
 )
 
 echo Building binaries...
