@@ -48,8 +48,8 @@ jobs:
           $env:PATH = "$($odinExe.DirectoryName);$env:PATH"
           odin version
       - name: Build and test
-        run: ./test.ps1
         shell: pwsh
+        run: ./test.ps1
       - name: Read version
         id: version_meta
         shell: pwsh
@@ -63,6 +63,7 @@ jobs:
           if ($version -notmatch '^\d+\.\d+\.\d+$') {
             throw "VERSION '$version' does not match the required format X.Y.Z"
           }
+      - name: Package binaries
         shell: pwsh
         run: |
           $version = "${{ steps.version_meta.outputs.version }}"
