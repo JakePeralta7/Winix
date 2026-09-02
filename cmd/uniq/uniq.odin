@@ -32,7 +32,50 @@ ascii_lower_byte :: proc(b: u8) -> u8 {
 	return b
 }
 
-// eq_maybe_fold compares two lines for equality, optionally ignoring ASCII case.
+// skip_to_field skips the first N whitespace-separated fields in s.
+skip_to_field :: proc(s: string, n: int) -> string {
+	result := s
+	for _ in 0..<n {
+		// Skip any leading whitespace.
+		for len(result) > 0 && (result[0] == ' ' || result[0] == '\t') {
+			result = result[1:]
+		}
+		// Skip the field itself.
+		for len(result) > 0 && result[0] != ' ' && result[0] != '\t' {
+			result = result[1:]
+		}
+	}
+	// Skip any leading whitespace after skipping fields.
+	for len(result) > 0 && (result[0] == ' ' || result[0] == '\t') {
+		result = result[1:]
+	}
+	return result
+}
+
+// extract_compare_part extracts the portion of line to be compared.
+// It skips N fields (if skip_fields > 0), then skips M chars (if skip_chars > 0),
+// then optionally limits to first N chars (if check_chars >= 0).
+extract_compare_part :: proc(line: string, skip_fields, skip_chars, check_chars: int) -> string {
+	result := line
+	if skip_fields > 0 {
+		result = skip_to_field(result, skip_fields)
+	}
+	if skip_chars > 0 {
+		if skip_chars >= len(result) {
+			return ""
+		}
+		result = result[skip_chars:]
+	}
+	if check_chars >= 0 {
+		if check_chars > len(result) {
+			return result
+		}
+		result = result[:check_chars]
+	}
+	return result
+}
+
+// eq_maybe_fold compares two compare-parts for equality, optionally ignoring ASCII case.
 eq_maybe_fold :: proc(a, b: string, ignore_case: bool) -> bool {
 	if !ignore_case { return a == b }
 	if len(a) != len(b) { return false }
@@ -44,44 +87,52 @@ eq_maybe_fold :: proc(a, b: string, ignore_case: bool) -> bool {
 
 // collect_runs groups adjacent equal lines into runs.
 // The Line_Run.line strings are slices into content; content must remain alive.
-collect_runs :: proc(content: string, ignore_case: bool) -> [dynamic]Line_Run {
+collect_runs :: proc(content: string, ignore_case: bool, skip_fields, skip_chars, check_chars: int, delim: u8) -> [dynamic]Line_Run {
 	runs := make([dynamic]Line_Run)
 
 	// Gather all lines (slices into content, no per-line allocation).
 	line_list := make([dynamic]string, context.temp_allocator)
 	rest := content
 	for {
-		nl := strings.index_byte(rest, '\n')
-		if nl < 0 {
+		delim_idx: int
+		if delim == 0 {
+			delim_idx = strings.index_byte(rest, 0)
+		} else {
+			delim_idx = strings.index_byte(rest, delim)
+		}
+		if delim_idx < 0 {
 			if len(rest) > 0 {
 				line := rest
-				if len(line) > 0 && line[len(line)-1] == '\r' {
+				if delim == '\n' && len(line) > 0 && line[len(line)-1] == '\r' {
 					line = line[:len(line)-1]
 				}
 				append(&line_list, line)
 			}
 			break
 		}
-		line := rest[:nl]
-		if len(line) > 0 && line[len(line)-1] == '\r' {
+		line := rest[:delim_idx]
+		if delim == '\n' && len(line) > 0 && line[len(line)-1] == '\r' {
 			line = line[:len(line)-1]
 		}
 		append(&line_list, line)
-		rest = rest[nl+1:]
+		rest = rest[delim_idx+1:]
 	}
 
 	lines := line_list[:]
 	if len(lines) == 0 { return runs }
 
 	cur   := lines[0]
+	cur_cmp := extract_compare_part(cur, skip_fields, skip_chars, check_chars)
 	count := 1
 	for i in 1..<len(lines) {
-		if eq_maybe_fold(lines[i], cur, ignore_case) {
+		next_cmp := extract_compare_part(lines[i], skip_fields, skip_chars, check_chars)
+		if eq_maybe_fold(next_cmp, cur_cmp, ignore_case) {
 			count += 1
 		} else {
 			append(&runs, Line_Run{line = cur, count = count})
-			cur   = lines[i]
-			count = 1
+			cur     = lines[i]
+			cur_cmp = next_cmp
+			count   = 1
 		}
 	}
 	append(&runs, Line_Run{line = cur, count = count})

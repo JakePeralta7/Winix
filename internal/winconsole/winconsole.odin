@@ -163,3 +163,81 @@ read_stdin_lines :: proc() -> []string {
     }
     return result[:]
 }
+
+// prompt_yes_no writes question to w (typically stderr) and reads a single
+// line from stdin. It returns true for an affirmative reply ('y', 'yes')
+// and false for a negative reply ('n', 'no'), both case-insensitive.
+// An empty reply or any unmatchable input returns default_answer.
+//
+// If stdin is not a terminal (piped/redirected) the reply is read from the
+// pipe as well, so scripts that pipe 'y' still work.
+prompt_yes_no :: proc(w: Writer, question: string, default_answer := false) -> bool {
+	write_string(w, question)
+	write_string(w, " ")
+
+	line := read_prompt_line()
+	line = strings.trim_space(line)
+	if line == "" {
+		return default_answer
+	}
+	switch strings.to_lower(line, context.temp_allocator) {
+	case "y", "yes":
+		return true
+	case "n", "no":
+		return false
+	case:
+		return default_answer
+	}
+}
+
+// read_prompt_line reads one line from the standard input handle. Returns "" if
+// the handle is unavailable. Uses ReadConsoleW on a terminal handle and
+// ReadFile (up to MAX_STDIN_BYTES) otherwise.
+@(private)
+read_prompt_line :: proc() -> string {
+	h := win.GetStdHandle(win.STD_INPUT_HANDLE)
+	if h == nil {
+		return ""
+	}
+	if win.GetFileType(h) == win.FILE_TYPE_CHAR {
+		// Terminal: read UTF-16 via ReadConsoleW.
+		buf := make([dynamic]u16, 0, 128, context.temp_allocator)
+		tmp: [128]u16
+		for {
+			read: win.DWORD
+			if !win.ReadConsoleW(h, &tmp[0], win.DWORD(len(tmp)), &read, nil) || read == 0 {
+				break
+			}
+			append(&buf, ..tmp[:read])
+			if int(read) < len(tmp) {
+				break // consumed the whole pending input in one shot
+			}
+		}
+		utf8, err := win.utf16_to_utf8(buf[:], context.temp_allocator)
+		if err != nil {
+			return ""
+		}
+		return strings.trim_right(utf8, "\r\n")
+	}
+	// Pipe/file: read up to a cap, then trim the first line.
+	all := make([dynamic]u8, 0, 4096, context.temp_allocator)
+	tmp: [4096]u8
+	for {
+		n: win.DWORD
+		if !win.ReadFile(h, &tmp[0], win.DWORD(len(tmp)), &n, nil) || n == 0 {
+			break
+		}
+		append(&all, ..tmp[:n])
+		if len(all) > MAX_STDIN_BYTES {
+			break
+		}
+		if int(n) < len(tmp) {
+			break
+		}
+	}
+	s := strings.trim_right(string(all[:]), "\r\n")
+	if i := strings.index_byte(s, '\n'); i >= 0 {
+		s = strings.trim_right(s[:i], "\r")
+	}
+	return s
+}

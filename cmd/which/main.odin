@@ -6,21 +6,24 @@ import "../../internal/winconsole"
 
 VERSION :: #config(VERSION, "dev")
 
-USAGE :: `Usage: which [-a] [--help] [--version] name ...
+USAGE :: `Usage: which [-a] [-s] [--help] [--version] name ...
 Locate a command by searching PATH.
 
-  -a, --all   print all matching paths, not just the first
-  --help      print this message and exit
-  --version   print version and exit
+  -a, --all        print all matching paths, not just the first
+  -s, --silent     no output, only set the exit status
+  --help           print this message and exit
+  --version        print version and exit
 `
 
 main :: proc() {
-	all, help, version: bool
+	all, silent, help, version: bool
 	spec := cliflag.Spec{
 		flags = []cliflag.Flag_Def{
-			{short = 'a', long = "all",     kind = .Bool_Last_Wins, target = &all,     value_if_set = true},
-			{long  = "help",                kind = .Bool_Last_Wins, target = &help,    value_if_set = true},
-			{long  = "version",             kind = .Bool_Last_Wins, target = &version, value_if_set = true},
+			{short = 'a', long = "all",        kind = .Bool_Last_Wins, target = &all,     value_if_set = true},
+			{short = 's', long = "silent",     kind = .Bool_Last_Wins, target = &silent,  value_if_set = true},
+			{long  = "no-output",              kind = .Bool_Last_Wins, target = &silent,  value_if_set = true},
+			{long  = "help",                   kind = .Bool_Last_Wins, target = &help,    value_if_set = true},
+			{long  = "version",                kind = .Bool_Last_Wins, target = &version, value_if_set = true},
 		},
 	}
 
@@ -63,14 +66,18 @@ main :: proc() {
 		defer free_results(paths)
 
 		if werr == .Not_Found {
-			winconsole.write_string(errw, name)
-			winconsole.write_string(errw, " not found\r\n")
+			if !silent {
+				winconsole.write_string(errw, name)
+				winconsole.write_string(errw, " not found\r\n")
+			}
 			exit_code = 1
 			continue
 		}
 
-		for p in paths {
-			winconsole.write_line(out, p)
+		if !silent {
+			for p in paths {
+				winconsole.write_line(out, p)
+			}
 		}
 	}
 	os.exit(exit_code)

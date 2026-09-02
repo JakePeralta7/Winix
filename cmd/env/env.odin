@@ -12,8 +12,6 @@ foreign kernel32 {
 	FreeEnvironmentStringsW :: proc(penv: [^]u16) -> win.BOOL ---
 }
 
-// get_env returns the current process environment as a slice of "NAME=VALUE"
-// strings.  The caller must free each string and the slice itself.
 get_env :: proc(allocator := context.allocator) -> ([]string, bool) {
 	block := GetEnvironmentStringsW()
 	if block == nil {
@@ -24,13 +22,11 @@ get_env :: proc(allocator := context.allocator) -> ([]string, bool) {
 	result := make([dynamic]string, 0, 64, allocator)
 	offset := 0
 	for {
-		// Measure the current null-terminated entry.
 		nlen := 0
 		for block[offset + nlen] != 0 {
 			nlen += 1
 		}
-		if nlen == 0 { break } // double-null terminator = end of block
-
+		if nlen == 0 { break }
 		s, err := win.utf16_to_utf8(block[offset : offset+nlen], allocator)
 		if err == nil {
 			append(&result, s)
@@ -40,7 +36,6 @@ get_env :: proc(allocator := context.allocator) -> ([]string, bool) {
 	return result[:], true
 }
 
-// env_name returns the NAME portion of a "NAME=VALUE" string.
 env_name :: proc(entry: string) -> string {
 	for i := 0; i < len(entry); i += 1 {
 		if entry[i] == '=' { return entry[:i] }
@@ -48,8 +43,6 @@ env_name :: proc(entry: string) -> string {
 	return entry
 }
 
-// should_exclude returns true when the entry's name matches any of the
-// names in the exclude list (case-insensitive on Windows).
 should_exclude :: proc(entry: string, exclude: []string) -> bool {
 	name := env_name(entry)
 	for ex in exclude {

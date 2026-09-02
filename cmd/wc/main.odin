@@ -9,22 +9,28 @@ import "../../internal/winio"
 
 VERSION :: #config(VERSION, "dev")
 
-USAGE :: `Usage: wc [-l] [-w] [-c] [--help] [--version] [file ...]
-Print newline, word, and byte counts for each file.
+USAGE :: `Usage: wc [OPTION]... [FILE]...
+Print newline, word, and byte counts for each FILE, and a total line if
+more than one FILE is specified. With no FILE, or when FILE is -, read
+standard input.
 
-  -l, --lines   print the newline count
-  -w, --words   print the word count
-  -c, --bytes   print the byte count
-  --help        print this message and exit
-  --version     print version and exit
+  -c, --bytes            print the byte counts
+  -m, --chars            print the character counts
+  -l, --lines            print the newline counts
+  -w, --words            print the word counts
+  -L, --max-line-length  print the maximum display width
+      --help             display this help and exit
+      --version          output version information and exit
 
-With no flags all three counts are printed. With no files reads from stdin.
+With no flags, wc prints lines, words, and bytes.
 `
 
-print_counts :: proc(out: winconsole.Writer, c: Counts, label: string, lines, words, bytes: bool) {
-	if lines { winconsole.write_string(out, fmt.tprintf(" %7d", c.lines)) }
-	if words { winconsole.write_string(out, fmt.tprintf(" %7d", c.words)) }
-	if bytes { winconsole.write_string(out, fmt.tprintf(" %7d", c.bytes)) }
+print_counts :: proc(out: winconsole.Writer, c: Counts, label: string, lines, words, bytes, chars, maxlen: bool) {
+	if lines  { winconsole.write_string(out, fmt.tprintf(" %7d", c.lines)) }
+	if words  { winconsole.write_string(out, fmt.tprintf(" %7d", c.words)) }
+	if chars  { winconsole.write_string(out, fmt.tprintf(" %7d", c.chars)) }
+	if bytes  { winconsole.write_string(out, fmt.tprintf(" %7d", c.bytes)) }
+	if maxlen { winconsole.write_string(out, fmt.tprintf(" %7d", c.max_line)) }
 	if label != "" {
 		winconsole.write_string(out, " ")
 		winconsole.write_string(out, label)
@@ -46,12 +52,14 @@ wc_error :: proc(err: winio.Error) -> string {
 }
 
 main :: proc() {
-	show_lines, show_words, show_bytes, help, version: bool
+	show_lines, show_words, show_bytes, show_chars, show_maxlen, help, version: bool
 	spec := cliflag.Spec{
 		flags = []cliflag.Flag_Def{
 			{short = 'l', long = "lines",   kind = .Bool_Last_Wins, target = &show_lines, value_if_set = true},
 			{short = 'w', long = "words",   kind = .Bool_Last_Wins, target = &show_words, value_if_set = true},
 			{short = 'c', long = "bytes",   kind = .Bool_Last_Wins, target = &show_bytes, value_if_set = true},
+			{short = 'm', long = "chars",   kind = .Bool_Last_Wins, target = &show_chars, value_if_set = true},
+			{short = 'L', long = "max-line-length", kind = .Bool_Last_Wins, target = &show_maxlen, value_if_set = true},
 			{long  = "help",                kind = .Bool_Last_Wins, target = &help,       value_if_set = true},
 			{long  = "version",             kind = .Bool_Last_Wins, target = &version,    value_if_set = true},
 		},
@@ -72,8 +80,8 @@ main :: proc() {
 	if help    { winconsole.write_string(out, USAGE); os.exit(0) }
 	if version { winconsole.write_line(out, "wc (winix) " + VERSION); os.exit(0) }
 
-	// If no output flags were set, enable all three.
-	if !show_lines && !show_words && !show_bytes {
+	// If no primary count flags were set, enable lines, words, and bytes.
+	if !show_lines && !show_words && !show_bytes && !show_chars && !show_maxlen {
 		show_lines = true
 		show_words = true
 		show_bytes = true
@@ -87,7 +95,7 @@ main :: proc() {
 		h := win.GetStdHandle(win.STD_INPUT_HANDLE)
 		if win.GetFileType(h) != win.FILE_TYPE_CHAR {
 			c := count_stdin()
-			print_counts(out, c, "", show_lines, show_words, show_bytes)
+			print_counts(out, c, "", show_lines, show_words, show_bytes, show_chars, show_maxlen)
 			os.exit(0)
 		}
 		winconsole.write_string(errw, "wc: missing operand\r\nTry 'wc --help'.\r\n")
@@ -108,11 +116,15 @@ main :: proc() {
 		total.lines += c.lines
 		total.words += c.words
 		total.bytes += c.bytes
-		print_counts(out, c, path, show_lines, show_words, show_bytes)
+		total.chars += c.chars
+		if c.max_line > total.max_line {
+			total.max_line = c.max_line
+		}
+		print_counts(out, c, path, show_lines, show_words, show_bytes, show_chars, show_maxlen)
 	}
 
 	if len(files) > 1 {
-		print_counts(out, total, "total", show_lines, show_words, show_bytes)
+		print_counts(out, total, "total", show_lines, show_words, show_bytes, show_chars, show_maxlen)
 	}
 
 	os.exit(exit_code)
