@@ -20,6 +20,16 @@ foreign kernel32 {
 
 	GetLogicalDrives :: proc() -> win.DWORD ---
 	GetDriveTypeW    :: proc(lpRootPathName: win.LPCWSTR) -> win.UINT ---
+	GetVolumeInformationW :: proc(
+		lpRootPathName:              win.LPCWSTR,
+		lpVolumeNameBuffer:         win.LPWSTR,
+		nVolumeNameSize:            win.DWORD,
+		lpVolumeSerialNumber:       ^win.DWORD,
+		lpMaximumComponentLength:   ^win.DWORD,
+		lpFileSystemFlags:          ^win.DWORD,
+		lpFileSystemNameBuffer:     win.LPWSTR,
+		nFileSystemNameSize:        win.DWORD,
+	) -> win.BOOL ---
 }
 
 DRIVE_FIXED    :: win.UINT(3)
@@ -32,6 +42,7 @@ Disk_Info :: struct {
 	total:      u64,    // total bytes
 	free:       u64,    // total free bytes
 	avail:      u64,    // bytes available to caller (may differ with quotas)
+	fs_type:    string, // e.g. "NTFS", "FAT32" ("" if unavailable)
 }
 
 // query_disk fills a Disk_Info for path (any path on the target volume).
@@ -41,7 +52,44 @@ query_disk :: proc(path: string) -> (Disk_Info, bool) {
 	info: Disk_Info
 	info.root = path
 	ok := GetDiskFreeSpaceExW(wpath, &info.avail, &info.total, &info.free)
-	return info, bool(ok)
+	if !ok {
+		return info, false
+	}
+	info.fs_type = query_fs_type(path)
+	return info, true
+}
+
+// query_fs_type returns the filesystem name of the volume containing path
+// (e.g. "NTFS") or "" when it cannot be determined.
+query_fs_type :: proc(path: string) -> string {
+	wpath := win.utf8_to_wstring(path, context.temp_allocator)
+	serial: win.DWORD
+	maxlen: win.DWORD
+	flags:  win.DWORD
+	vname:  [128]u16
+	fsname: [64]u16
+	ok := GetVolumeInformationW(
+		wpath,
+		&vname[0],
+		win.DWORD(len(vname)),
+		&serial,
+		&maxlen,
+		&flags,
+		&fsname[0],
+		win.DWORD(len(fsname)),
+	)
+	if !ok {
+		return ""
+	}
+	n := 0
+	for n < len(fsname) && fsname[n] != 0 {
+		n += 1
+	}
+	s, err := win.utf16_to_utf8(fsname[:n], context.temp_allocator)
+	if err != nil {
+		return ""
+	}
+	return s
 }
 
 // all_local_disks returns Disk_Info for every fixed or RAM drive present.
@@ -69,13 +117,15 @@ format_size_1k :: proc(bytes: u64) -> string {
 
 // format_size_human returns a human-readable size string (K/M/G/T).
 format_size_human :: proc(bytes: u64) -> string {
-	if bytes < 1024 { return fmt.tprintf("%dB", bytes) }
+	suffixes := []string{"B", "K", "M", "G", "T", "P", "E"}
 	v := f64(bytes)
-	suffixes := []string{"K", "M", "G", "T", "P"}
 	idx := 0
 	for v >= 1024 && idx < len(suffixes)-1 {
 		v /= 1024
 		idx += 1
+	}
+	if idx == 0 {
+		return fmt.tprintf("%d%s", bytes, "B")
 	}
 	if v < 10 { return fmt.tprintf("%.1f%s", v, suffixes[idx]) }
 	return fmt.tprintf("%.0f%s", v, suffixes[idx])

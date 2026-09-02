@@ -9,12 +9,21 @@ import "../../internal/winio"
 
 VERSION :: #config(VERSION, "dev")
 
-USAGE :: `Usage: head [-n COUNT] [--help] [--version] file ...
-Print the first 10 lines of each file to standard output.
+USAGE :: `Usage: head [OPTION]... [FILE]...
+Print the first 10 lines of each FILE to standard output.
+With no FILE, or when FILE is -, read standard input.
 
-  -n COUNT, --lines COUNT  print the first COUNT lines (default 10)
-  --help                   print this message and exit
-  --version                print version and exit
+  -c, --bytes=[-]NUM       print the first NUM bytes of each file
+  -n, --lines=[-]NUM       print the first NUM lines instead of the first 10
+  -q, --quiet, --silent    never print headers giving file names
+  -v, --verbose            always print headers giving file names
+  -z, --zero-terminated    line delimiter is NUL, not newline
+      --help               display this help and exit
+      --version            output version information and exit
+
+NUM may have a multiplier suffix: b 512, kB 1000, K 1024, MB 1000*1000,
+M 1024*1024, GB, G, T, and so on. If NUM is negative, print all but the
+last NUM bytes/lines.
 `
 
 DEFAULT_LINES :: 10
@@ -24,50 +33,34 @@ main :: proc() {
 	out  := winconsole.stdout()
 	errw := winconsole.stderr()
 
-	// Pre-process: extract -n / --lines count before passing to cliflag.
-	line_count := DEFAULT_LINES
-	filtered := make([dynamic]string, 0, len(raw_args), context.temp_allocator)
-	i := 0
-	for i < len(raw_args) {
-		arg := raw_args[i]
-		if arg == "-n" || arg == "--lines" {
-			i += 1
-			if i >= len(raw_args) {
-				winconsole.write_string(errw, "head: option requires an argument -- 'n'\r\nTry 'head --help'.\r\n")
-				os.exit(2)
-			}
-			n, ok := strconv.parse_int(raw_args[i], 10)
-			if !ok || n < 0 {
-				winconsole.write_string(errw, "head: invalid number of lines: '")
-				winconsole.write_string(errw, raw_args[i])
-				winconsole.write_string(errw, "'\r\nTry 'head --help'.\r\n")
-				os.exit(2)
-			}
-			line_count = n
-		} else if len(arg) > 2 && arg[0] == '-' && arg[1] == 'n' {
-			n, ok := strconv.parse_int(arg[2:], 10)
-			if !ok || n < 0 {
-				winconsole.write_string(errw, "head: invalid number of lines: '")
-				winconsole.write_string(errw, arg[2:])
-				winconsole.write_string(errw, "'\r\nTry 'head --help'.\r\n")
-				os.exit(2)
-			}
-			line_count = n
-		} else {
-			append(&filtered, arg)
-		}
-		i += 1
-	}
-
-	help, version: bool
+	help, version, quiet, verbose, zflag: bool
+	lines, bytes: [dynamic]string
 	spec := cliflag.Spec{
 		flags = []cliflag.Flag_Def{
 			{long = "help",    kind = .Bool_Last_Wins, target = &help,    value_if_set = true},
 			{long = "version", kind = .Bool_Last_Wins, target = &version, value_if_set = true},
+			{long = "quiet", short = 'q', kind = .Bool_Last_Wins, target = &quiet, value_if_set = true},
+			{long = "silent", kind = .Bool_Last_Wins, target = &quiet, value_if_set = true},
+			{long = "verbose", short = 'v', kind = .Bool_Last_Wins, target = &verbose, value_if_set = true},
+			{long = "zero-terminated", short = 'z', kind = .Bool_Last_Wins, target = &zflag, value_if_set = true},
+			{long = "lines", short = 'n', kind = .Value_Next, values = &lines},
+			{long = "bytes", short = 'c', kind = .Value_Next, values = &bytes},
 		},
 	}
 
-	parsed, perr, tok := cliflag.parse(filtered[:], spec)
+	// Obsolete "-NUM" form is only recognized as the very first argument.
+	has_obsolete := false
+	parse_args := raw_args
+	if len(raw_args) > 0 {
+		_, _, ok := cliflag.parse_obsolete_number(raw_args[0])
+		if ok {
+			has_obsolete = true
+			parse_args = raw_args[1:]
+		}
+	}
+
+	parsed, perr, tok := cliflag.parse(parse_args, spec)
+
 	if perr != .None {
 		winconsole.write_string(errw, "head: unknown option: ")
 		winconsole.write_string(errw, tok)
@@ -79,13 +72,46 @@ main :: proc() {
 		os.exit(0)
 	}
 	if version {
-		winconsole.write_line(out, "head (winix) " + VERSION)
+		winconsole.write_string(out, "head (winix) " + VERSION + "\r\n")
 		os.exit(0)
 	}
+
+	// Determine the count: -c wins over -n; obsolete form only when first arg.
+	opts := Head_Options{lines = -1, bytes = -1}
+	if has_obsolete && len(raw_args) > 0 {
+		count, unit, _ := cliflag.parse_obsolete_number(raw_args[0])
+		switch unit {
+		case .Lines:
+			opts.lines = int(count)
+		case .Bytes:
+			opts.bytes = i64(count)
+		}
+	}
+	if len(bytes) > 0 {
+		v, ok := strconv.parse_i64(bytes[len(bytes)-1], 10)
+		if !ok {
+			fail_invalid(errw, "byte count", bytes[len(bytes)-1])
+		}
+		opts.bytes = v
+	}
+	if len(lines) > 0 {
+		v, ok := strconv.parse_int(lines[len(lines)-1], 10)
+		if !ok {
+			fail_invalid(errw, "line count", lines[len(lines)-1])
+		}
+		opts.lines = v
+	}
+	_ = zflag
+
+	print_headers := (len(parsed.rest) > 1) && !quiet
+	if verbose {
+		print_headers = true
+	}
+
 	if len(parsed.rest) == 0 {
 		h := win.GetStdHandle(win.STD_INPUT_HANDLE)
 		if win.GetFileType(h) != win.FILE_TYPE_CHAR {
-			if err := write_head_from_stdin(line_count); err != .None {
+			if err := write_head_from_stdin(opts); err != .None {
 				winconsole.write_string(errw, "head: error reading stdin\r\n")
 				os.exit(1)
 			}
@@ -95,7 +121,6 @@ main :: proc() {
 		os.exit(1)
 	}
 
-	print_headers := len(parsed.rest) > 1
 	exit_code := 0
 	for path, idx in parsed.rest {
 		if print_headers {
@@ -106,12 +131,21 @@ main :: proc() {
 			winconsole.write_string(out, path)
 			winconsole.write_string(out, " <==\r\n")
 		}
-		err := write_head(path, line_count)
+		err := write_head(path, opts)
 		if err == .None { continue }
 		report_error(errw, path, err)
 		exit_code = 1
 	}
 	os.exit(exit_code)
+}
+
+fail_invalid :: proc(errw: winconsole.Writer, what, val: string) -> ! {
+	winconsole.write_string(errw, "head: invalid ")
+	winconsole.write_string(errw, what)
+	winconsole.write_string(errw, ": '")
+	winconsole.write_string(errw, val)
+	winconsole.write_string(errw, "'\r\nTry 'head --help'.\r\n")
+	os.exit(2)
 }
 
 report_error :: proc(errw: winconsole.Writer, path: string, err: winio.Error) {

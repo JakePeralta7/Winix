@@ -28,30 +28,35 @@ read_all :: proc(h: win.HANDLE) -> []u8 {
 	return out[:]
 }
 
-// split_to_lines returns substrings of content split at newline boundaries.
-// Trailing \r is stripped from each line.
+// split_to_lines returns substrices of content split at delimiter boundaries.
+// Trailing \r is stripped from each line when delimiter is '\n'.
 // The returned strings are slices into content — content must remain alive.
-split_to_lines :: proc(content: string) -> []string {
+split_to_lines :: proc(content: string, delim: u8) -> []string {
 	result := make([dynamic]string)
 	rest   := content
 	for {
-		nl := strings.index_byte(rest, '\n')
-		if nl < 0 {
+		delim_idx: int
+		if delim == 0 {
+			delim_idx = strings.index_byte(rest, 0)
+		} else {
+			delim_idx = strings.index_byte(rest, delim)
+		}
+		if delim_idx < 0 {
 			if len(rest) > 0 {
 				line := rest
-				if len(line) > 0 && line[len(line)-1] == '\r' {
+				if delim == '\n' && len(line) > 0 && line[len(line)-1] == '\r' {
 					line = line[:len(line)-1]
 				}
 				append(&result, line)
 			}
 			break
 		}
-		line := rest[:nl]
-		if len(line) > 0 && line[len(line)-1] == '\r' {
+		line := rest[:delim_idx]
+		if delim == '\n' && len(line) > 0 && line[len(line)-1] == '\r' {
 			line = line[:len(line)-1]
 		}
 		append(&result, line)
-		rest = rest[nl+1:]
+		rest = rest[delim_idx+1:]
 	}
 	return result[:]
 }
@@ -60,6 +65,15 @@ split_to_lines :: proc(content: string) -> []string {
 ascii_lower_byte :: proc(b: u8) -> u8 {
 	if b >= 'A' && b <= 'Z' { return b + 32 }
 	return b
+}
+
+// skip_leading_blanks returns the substring with leading spaces/tabs removed.
+skip_leading_blanks :: proc(s: string) -> string {
+	i := 0
+	for i < len(s) && (s[i] == ' ' || s[i] == '\t') {
+		i += 1
+	}
+	return s[i:]
 }
 
 // compare_alpha reports whether a is lexicographically less than b.
@@ -86,6 +100,57 @@ compare_numeric :: proc(a, b: string) -> bool {
 	return a < b
 }
 
+// compare_general_numeric is like compare_numeric but ignores leading blanks first.
+compare_general_numeric :: proc(a, b: string) -> bool {
+	na, _ := strconv.parse_f64(strings.trim_space(skip_leading_blanks(a)))
+	nb, _ := strconv.parse_f64(strings.trim_space(skip_leading_blanks(b)))
+	if na != nb { return na < nb }
+	return a < b
+}
+
+// version compares numbers in GNV ./software-version order: split into digit
+// and non-digit runs and compare element-wise. Numbers compare numerically.
+version :: proc(a, b: string) -> bool {
+	ai := 0
+	bi := 0
+	for ai < len(a) && bi < len(b) {
+		if is_digit(a[ai]) && is_digit(b[bi]) {
+			va, na := digit_run(a, ai)
+			vb, nb := digit_run(b, bi)
+			if va != vb {
+				return va < vb
+			}
+			ai = na
+			bi = nb
+			continue
+		}
+		ca := a[ai]
+		cb := b[bi]
+		if ca != cb {
+			return ca < cb
+		}
+		ai += 1
+		bi += 1
+	}
+	// Shorter string sorts first when one is a prefix of the other.
+	return len(a) < len(b)
+}
+
+// is_digit reports whether b is an ASCII digit.
+is_digit :: proc(b: u8) -> bool { return b >= '0' && b <= '9' }
+
+// digit_run parses the numeric value of the digit run starting at i and
+// returns the value and the index one past the run.
+digit_run :: proc(s: string, i: int) -> (u64, int) {
+	v: u64
+	j := i
+	for j < len(s) && is_digit(s[j]) {
+		v = v * 10 + u64(s[j] - '0')
+		j += 1
+	}
+	return v, j
+}
+
 // eq_fold reports whether a and b are equal ignoring ASCII case.
 eq_fold :: proc(a, b: string) -> bool {
 	if len(a) != len(b) { return false }
@@ -95,13 +160,28 @@ eq_fold :: proc(a, b: string) -> bool {
 	return true
 }
 
-// do_sort sorts lines in place and returns the result slice.
-// When unique is true the returned slice may be a subslice of lines.
-do_sort :: proc(lines: []string, reverse, numeric, fold_case, unique: bool) -> []string {
-	if numeric {
+// compare_version_less is the comparator for -V.
+compare_version_less :: proc(a, b: string) -> bool { return version(a, b) }
+
+// compare_skipped_alpha is lexical comparison after stripping leading blanks.
+compare_skipped_alpha :: proc(a, b: string) -> bool {
+	return skip_leading_blanks(a) < skip_leading_blanks(b)
+}
+
+// do_sort sorts lines per the given options and returns the result slice.
+// Ops flags select one comparator (highest wins): version > general_numeric >
+// numeric > fold > alpha; -b prefixes the comparison with blank stripping.
+do_sort :: proc(lines: []string, reverse, numeric, fold_case, unique, blanks, general_num, version_sort: bool) -> []string {
+	if version_sort {
+		slice.sort_by(lines, compare_version_less)
+	} else if general_num {
+		slice.sort_by(lines, compare_general_numeric)
+	} else if numeric {
 		slice.sort_by(lines, compare_numeric)
 	} else if fold_case {
 		slice.sort_by(lines, compare_fold)
+	} else if blanks {
+		slice.sort_by(lines, compare_skipped_alpha)
 	} else {
 		slice.sort_by(lines, compare_alpha)
 	}
@@ -117,6 +197,8 @@ do_sort :: proc(lines: []string, reverse, numeric, fold_case, unique: bool) -> [
 			same: bool
 			if fold_case {
 				same = eq_fold(lines[i], lines[j-1])
+			} else if blanks {
+				same = skip_leading_blanks(lines[i]) == skip_leading_blanks(lines[j-1])
 			} else {
 				same = lines[i] == lines[j-1]
 			}

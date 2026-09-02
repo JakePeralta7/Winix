@@ -6,20 +6,32 @@ import "../../internal/winconsole"
 
 VERSION :: #config(VERSION, "dev")
 
-USAGE :: `Usage: touch [--help] [--version] file ...
-Update the access and modification timestamps of each file.
+USAGE :: `Usage: touch [OPTION]... FILE...
+Update the access and modification timestamps of each FILE.
 Create the file if it does not exist.
 
-  --help      print this message and exit
-  --version   print version and exit
+  -a, --access-time        change only the access time
+  -c, --no-create          do not create any files
+  -m, --modification-time  change only the modification time
+  -r, --reference=FILE     use this file's times instead of current time
+      --help               display this help and exit
+      --version            output version information and exit
+
+Note: If both -a and -m are omitted, both access and modification times are updated.
 `
 
 main :: proc() {
 	help, version: bool
+	access_only, modify_only, no_create: bool
+	ref_path: [dynamic]string
 	spec := cliflag.Spec{
 		flags = []cliflag.Flag_Def{
-			{long = "help",    kind = .Bool_Last_Wins, target = &help,    value_if_set = true},
-			{long = "version", kind = .Bool_Last_Wins, target = &version, value_if_set = true},
+			{short = 'a', long = "access-time",       kind = .Bool_Last_Wins, target = &access_only, value_if_set = true},
+			{short = 'c', long = "no-create",         kind = .Bool_Last_Wins, target = &no_create,   value_if_set = true},
+			{short = 'm', long = "modification-time", kind = .Bool_Last_Wins, target = &modify_only, value_if_set = true},
+			{short = 'r', long = "reference",         kind = .Value_Next, values = &ref_path},
+			{             long = "help",              kind = .Bool_Last_Wins, target = &help,        value_if_set = true},
+			{             long = "version",           kind = .Bool_Last_Wins, target = &version,     value_if_set = true},
 		},
 	}
 
@@ -35,16 +47,10 @@ main :: proc() {
 		winconsole.write_string(errw, "\r\nTry 'touch --help'.\r\n")
 		os.exit(2)
 	}
-	if help {
-		winconsole.write_string(out, USAGE)
-		os.exit(0)
-	}
-	if version {
-		winconsole.write_line(out, "touch (winix) " + VERSION)
-		os.exit(0)
-	}
-	paths := parsed.rest
+	if help    { winconsole.write_string(out, USAGE); os.exit(0) }
+	if version { winconsole.write_line(out, "touch (winix) " + VERSION); os.exit(0) }
 
+	paths := parsed.rest
 	if len(paths) == 0 {
 		if stdin_lines := winconsole.read_stdin_lines(); stdin_lines != nil {
 			paths = stdin_lines
@@ -56,9 +62,19 @@ main :: proc() {
 		os.exit(1)
 	}
 
+	reference_path: string
+	if len(ref_path) > 0 { reference_path = ref_path[len(ref_path)-1] } else { reference_path = "" }
+
+	opts := Touch_Opts{
+		access_only    = access_only,
+		modify_only    = modify_only,
+		no_create      = no_create,
+		reference_path = reference_path,
+	}
+
 	exit_code := 0
 	for path in paths {
-		err := touch(path)
+		err := touch(path, opts)
 		if err == .None { continue }
 		report_error(errw, path, err)
 		exit_code = 1

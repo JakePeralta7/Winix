@@ -6,26 +6,34 @@ import "../../internal/winconsole"
 
 VERSION :: #config(VERSION, "dev")
 
-USAGE :: `Usage: rm [-r] [-f] [-v] [--help] [--version] file ...
-Remove files or directories.
+USAGE :: `Usage: rm [OPTION]... [FILE]...
+Remove (unlink) the FILE(s).
 
-  -r, -R, --recursive  remove directories and their contents recursively
-  -f, --force          ignore nonexistent files and arguments, never prompt
-  -v, --verbose        explain what is being done
-  --help               print this message and exit
-  --version            print version and exit
+  -d, --dir           remove empty directories
+  -f, --force         ignore nonexistent files and arguments, never prompt
+  -i, --interactive   prompt before every removal
+  -I                  prompt once before removing more than three files,
+                      or when removing recursively
+  -r, -R, --recursive remove directories and their contents recursively
+  -v, --verbose       explain what is being done
+      --help          print this message and exit
+      --version       print version and exit
+By default, rm does not remove directories.
 `
 
 main :: proc() {
-	recursive, force, verbose, help, version: bool
+	recursive, force, verbose, interactive, dir, prompt_many, help, version: bool
 	spec := cliflag.Spec{
 		flags = []cliflag.Flag_Def{
-			{short = 'r', long = "recursive", kind = .Bool_Last_Wins, target = &recursive, value_if_set = true},
-			{short = 'R',                     kind = .Bool_Last_Wins, target = &recursive, value_if_set = true},
-			{short = 'f', long = "force",     kind = .Bool_Last_Wins, target = &force,     value_if_set = true},
-			{short = 'v', long = "verbose",   kind = .Bool_Last_Wins, target = &verbose,   value_if_set = true},
-			{long  = "help",                  kind = .Bool_Last_Wins, target = &help,      value_if_set = true},
-			{long  = "version",               kind = .Bool_Last_Wins, target = &version,   value_if_set = true},
+			{short = 'd', long = "dir",         kind = .Bool_Last_Wins, target = &dir,          value_if_set = true},
+			{short = 'f', long = "force",       kind = .Bool_Last_Wins, target = &force,        value_if_set = true},
+			{short = 'i', long = "interactive", kind = .Bool_Last_Wins, target = &interactive,  value_if_set = true},
+			{short = 'I',                      kind = .Bool_Last_Wins, target = &prompt_many,  value_if_set = true},
+			{short = 'r', long = "recursive",  kind = .Bool_Last_Wins, target = &recursive,    value_if_set = true},
+			{short = 'R',                      kind = .Bool_Last_Wins, target = &recursive,    value_if_set = true},
+			{short = 'v', long = "verbose",    kind = .Bool_Last_Wins, target = &verbose,      value_if_set = true},
+			{             long = "help",       kind = .Bool_Last_Wins, target = &help,         value_if_set = true},
+			{             long = "version",    kind = .Bool_Last_Wins, target = &version,      value_if_set = true},
 		},
 	}
 
@@ -64,7 +72,11 @@ main :: proc() {
 		os.exit(1)
 	}
 
-	// notify is called by winrm after each successful deletion when -v is set.
+	// -f overrides -i; -I prompts once, not per-file.
+	force_mode := force
+	prompt_each := interactive && !force_mode
+
+	// Build the notify callback for -v.
 	notify: Notify_Proc = nil
 	if verbose {
 		notify = proc(path: string, is_dir: bool) {
@@ -79,17 +91,53 @@ main :: proc() {
 		}
 	}
 
+	// Build the per-file prompt callback for -i.
+	prompt: Prompt_Proc = nil
+	if prompt_each {
+		prompt = proc(path: string, is_dir: bool) -> bool {
+			errc := winconsole.stderr()
+			kind := "file"
+			if is_dir { kind = "directory" }
+			winconsole.write_string(errc, "rm: remove ")
+			winconsole.write_string(errc, kind)
+			winconsole.write_string(errc, " '")
+			winconsole.write_string(errc, path)
+			winconsole.write_string(errc, "'? ")
+			return winconsole.prompt_yes_no(errc, "")
+		}
+	}
+
+	opts := Options{
+		prompt    = prompt,
+		notify    = notify,
+		allow_dir = dir,
+	}
+
+	// -I: prompt once before proceeding (when recursive or >3 files).
+	if prompt_many && !force_mode {
+		should_prompt := recursive || len(paths) > 3
+		if should_prompt {
+			question := "rm: remove all arguments recursively? "
+			if !recursive {
+				question = "rm: remove all arguments? "
+			}
+			if !winconsole.prompt_yes_no(errw, question) {
+				os.exit(0)
+			}
+		}
+	}
+
 	exit_code := 0
 	for path in paths {
 		err: Error
 		if recursive {
-			err = remove_all(path, notify)
+			err = remove_all(path, opts)
 		} else {
-			err = remove(path, notify)
+			err = remove(path, opts)
 		}
 
 		if err == .None { continue }
-		if err == .Not_Found && force { continue }
+		if err == .Not_Found && force_mode { continue }
 		report_error(errw, path, err)
 		exit_code = 1
 	}

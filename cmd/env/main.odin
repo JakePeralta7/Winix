@@ -6,24 +6,32 @@ import "../../internal/winconsole"
 
 VERSION :: #config(VERSION, "dev")
 
-USAGE :: `Usage: env [-u NAME] [--help] [--version]
-Print the current environment, one NAME=VALUE pair per line.
+USAGE :: `Usage: env [OPTION]... [NAME=VALUE]... [COMMAND [ARG]...]
+Run a program in a modified environment or print the current environment.
 
-  -u NAME, --unset NAME  exclude NAME from the output (repeatable)
-  --help                 print this message and exit
-  --version              print version and exit
+  -i, --ignore-environment  start with an empty environment
+  -u, --unset=NAME          remove variable from the environment
+  -0, --null                end output with NUL instead of newline
+      --help                display this help and exit
+      --version             output version information and exit
+
+If no COMMAND, print the resulting environment, one NAME=VALUE per line.
 `
 
 main :: proc() {
 	help, version: bool
+	ignore_env, null_term: bool
+	unset_vals: [dynamic]string
 	spec := cliflag.Spec{
 		flags = []cliflag.Flag_Def{
-			{long = "help",    kind = .Bool_Last_Wins, target = &help,    value_if_set = true},
-			{long = "version", kind = .Bool_Last_Wins, target = &version, value_if_set = true},
+			{short = 'i', long = "ignore-environment", kind = .Bool_Last_Wins, target = &ignore_env, value_if_set = true},
+			{short = 'u', long = "unset",             kind = .Value_Next, values = &unset_vals},
+			{short = '0', long = "null",              kind = .Bool_Last_Wins, target = &null_term, value_if_set = true},
+			{             long = "help",              kind = .Bool_Last_Wins, target = &help,        value_if_set = true},
+			{             long = "version",           kind = .Bool_Last_Wins, target = &version,     value_if_set = true},
 		},
 	}
 
-	// Pre-process args: extract -u / --unset NAME pairs before handing to cliflag.
 	raw_args := os.args[1:] if len(os.args) > 1 else []string{}
 	exclude  := make([dynamic]string, 0, 4, context.temp_allocator)
 	filtered := make([dynamic]string, 0, len(raw_args), context.temp_allocator)
@@ -37,6 +45,8 @@ main :: proc() {
 				os.exit(2)
 			}
 			append(&exclude, raw_args[i])
+		} else if arg == "-i" || arg == "--ignore-environment" {
+			append(&filtered, arg)
 		} else {
 			append(&filtered, arg)
 		}
@@ -57,22 +67,33 @@ main :: proc() {
 	if help    { winconsole.write_string(out, USAGE); os.exit(0) }
 	if version { winconsole.write_line(out, "env (winix) " + VERSION); os.exit(0) }
 
-	// Ignore any remaining positional args (kept for future NAME=VALUE support).
-	_ = parsed.rest
+	for v in unset_vals { append(&exclude, v) }
 
 	entries, ok := get_env()
 	if !ok {
 		winconsole.write_string(errw, "env: failed to read environment\r\n")
 		os.exit(1)
 	}
-	defer {
+
+	if ignore_env {
 		for e in entries { delete(e) }
 		delete(entries)
+		entries = make([dynamic]string, 0, 0, context.temp_allocator)[:]
+	}
+
+	delim := "\r\n"
+	if null_term {
+		null_bytes := [1]u8{0}
+		delim = string(transmute([]u8)(null_bytes[:]))
 	}
 
 	for entry in entries {
 		if should_exclude(entry, exclude[:]) { continue }
 		winconsole.write_string(out, entry)
-		winconsole.write_string(out, "\r\n")
+		winconsole.write_string(out, delim)
 	}
+
+	for e in entries { delete(e) }
+	delete(entries)
+	os.exit(0)
 }

@@ -58,7 +58,7 @@ dry_run_shows_would_kill :: proc(t: ^testing.T) {
 
 	time.sleep(200 * time.Millisecond)
 
-	out, _, code := run(t, []string{"-n", "ping"})
+	out, _, code := run(t, []string{"-d", "ping"})
 	defer delete(out)
 	testing.expect_value(t, code, 0)
 	testing.expect(t, strings.contains(string(out), "would kill"), "expected 'would kill' in output")

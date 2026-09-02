@@ -23,6 +23,7 @@ Error :: enum {
 // Entry holds the metadata for one directory item.
 Entry :: struct {
 	name:        string,
+	path:        string, // full path used for recursive descent
 	is_dir:      bool,
 	is_reparse:  bool,
 	is_hidden:   bool,
@@ -47,13 +48,15 @@ list_dir :: proc(path: string, all: bool, allocator := context.allocator) -> (en
 	fd: win.WIN32_FIND_DATAW
 	h := win.FindFirstFileW(wpattern, &fd)
 	if h == win.INVALID_HANDLE {
+		// If the path is not a directory (it may be a plain file), we report it
+		// via Find_Failed so the caller can handle a single-file operand.
 		return nil, .Find_Failed
 	}
 	defer win.FindClose(h)
 
 	result := make([dynamic]Entry, 0, 16, allocator)
 	for {
-		if e, ok := to_entry(&fd, all, allocator); ok {
+		if e, ok := to_entry(p, &fd, all, allocator); ok {
 			append(&result, e)
 		}
 		if !win.FindNextFileW(h, &fd) {
@@ -68,12 +71,46 @@ list_dir :: proc(path: string, all: bool, allocator := context.allocator) -> (en
 free_entries :: proc(entries: []Entry, allocator := context.allocator) {
 	for e in entries {
 		delete(e.name, allocator)
+		delete(e.path, allocator)
 	}
 	delete(entries, allocator)
 }
 
+// stat_one returns a single Entry describing a file/directory operand (used
+// when a path argument is not a directory). Returns ok=false when the path
+// cannot be queried.
+stat_one :: proc(path: string, allocator := context.allocator) -> (e: Entry, ok: bool) {
+	wpath := win.utf8_to_wstring(path, context.temp_allocator)
+	info: win.WIN32_FILE_ATTRIBUTE_DATA
+	if !win.GetFileAttributesExW(wpath, win.GetFileExInfoStandard, &info) {
+		return {}, false
+	}
+	attrs := info.dwFileAttributes
+	e.name = strings_clone(path, allocator)
+	e.path = strings_clone(path, allocator)
+	e.is_dir      = (attrs & win.FILE_ATTRIBUTE_DIRECTORY) != 0
+	e.is_reparse  = (attrs & win.FILE_ATTRIBUTE_REPARSE_POINT) != 0
+	e.is_hidden   = (attrs & win.FILE_ATTRIBUTE_HIDDEN) != 0
+	e.is_readonly = (attrs & win.FILE_ATTRIBUTE_READONLY) != 0
+	e.size = u64(info.nFileSizeHigh) << 32 | u64(info.nFileSizeLow)
+
+	local_ft: win.FILETIME
+	sys: win.SYSTEMTIME
+	FileTimeToLocalFileTime(&info.ftLastWriteTime, &local_ft)
+	win.FileTimeToSystemTime(&local_ft, &sys)
+	e.year, e.month, e.day, e.hour, e.minute = sys.year, sys.month, sys.day, sys.hour, sys.minute
+	return e, true
+}
+
 @(private)
-to_entry :: proc(fd: ^win.WIN32_FIND_DATAW, all: bool, allocator := context.allocator) -> (Entry, bool) {
+strings_clone :: proc(s: string, allocator := context.allocator) -> string {
+	bytes := make([]u8, len(s), allocator)
+	copy(bytes, transmute([]u8)s)
+	return string(bytes)
+}
+
+@(private)
+to_entry :: proc(dir: string, fd: ^win.WIN32_FIND_DATAW, all: bool, allocator := context.allocator) -> (Entry, bool) {
 	attrs       := fd.dwFileAttributes
 	is_hidden   := (attrs & win.FILE_ATTRIBUTE_HIDDEN) != 0
 	is_dir      := (attrs & win.FILE_ATTRIBUTE_DIRECTORY) != 0
@@ -99,6 +136,8 @@ to_entry :: proc(fd: ^win.WIN32_FIND_DATAW, all: bool, allocator := context.allo
 		return {}, false
 	}
 
+	full_path := winio.join_path(dir, name, allocator)
+
 	// Convert UTC FILETIME -> local SYSTEMTIME
 	local_ft: win.FILETIME
 	sys: win.SYSTEMTIME
@@ -109,6 +148,7 @@ to_entry :: proc(fd: ^win.WIN32_FIND_DATAW, all: bool, allocator := context.allo
 
 	return Entry{
 		name        = name,
+		path        = full_path,
 		is_dir      = is_dir,
 		is_reparse  = is_reparse,
 		is_hidden   = is_hidden,

@@ -2,6 +2,7 @@ package main
 
 import "core:fmt"
 import "core:os"
+import regexp "core:text/regex"
 import win "core:sys/windows"
 import "../../internal/cliflag"
 import "../../internal/winconsole"
@@ -9,17 +10,24 @@ import "../../internal/winio"
 
 VERSION :: #config(VERSION, "dev")
 
-USAGE :: `Usage: grep [-i] [-n] [-l] [-v] [-c] [-r] [--help] [--version] PATTERN [file ...]
-Search for PATTERN in each file (fixed-string, not a regular expression).
+USAGE :: `Usage: grep [OPTION]... PATTERN [FILE]...
+Search for PATTERN in each FILE (extended regular expression by default).
 
-  -i, --ignore-case        case-insensitive matching
-  -n, --line-number        prefix matching lines with their line number
-  -l, --files-with-matches print only the names of files with matches
-  -v, --invert-match       select non-matching lines
-  -c, --count              print only a count of matching lines per file
-  -r, --recursive          search directories recursively
-  --help                   print this message and exit
-  --version                print version and exit
+  -e, --regexp=PATTERN   use PATTERN as the search pattern
+  -f, --file=FILE        obtain patterns from FILE (one per line)
+  -E, --extended-regexp  PATTERN is an extended regular expression (default)
+  -F, --fixed-strings    PATTERN is a fixed string, not a regular expression
+  -i, --ignore-case      ignore case distinctions
+  -n, --line-number      print line number with output lines
+  -l, --files-with-matches  print only FILE names containing matches
+  -L, --files-without-match  print only FILE names containing no match
+  -v, --invert-match     select non-matching lines
+  -c, --count            print only a count of matching lines per file
+  -q, --quiet            suppress all output
+  -s, --no-messages      suppress error messages
+  -r, --recursive        search directories recursively
+  --help                 display this help and exit
+  --version              output version information and exit
 
 Exit status is 0 if any line matched, 1 if no match was found, 2 on error.
 `
@@ -42,25 +50,29 @@ print_match :: proc(out: winconsole.Writer, m: Line_Match, show_filename: bool, 
 search_one :: proc(
 	out, errw:        winconsole.Writer,
 	path:             string,
-	pattern:          string,
 	opts:             Match_Opts,
 	show_filename:    bool,
 	show_line_num:    bool,
 	files_only:       bool,
+	files_without:    bool,
 	count_only:       bool,
+	quiet:            bool,
+	suppress_errors:  bool,
 ) -> (match_count: int, had_error: bool) {
 	fh, ferr := winio.open_file_for_read(path)
 	if ferr != .None {
-		winconsole.write_string(errw, "grep: ")
-		winconsole.write_string(errw, path)
-		winconsole.write_string(errw, ": ")
-		#partial switch ferr {
-		case .Not_Found:     winconsole.write_string(errw, "no such file or directory")
-		case .Is_Directory:  winconsole.write_string(errw, "is a directory")
-		case .Access_Denied: winconsole.write_string(errw, "permission denied")
-		case:                winconsole.write_string(errw, "open failed")
+		if !suppress_errors {
+			winconsole.write_string(errw, "grep: ")
+			winconsole.write_string(errw, path)
+			winconsole.write_string(errw, ": ")
+			#partial switch ferr {
+			case .Not_Found:     winconsole.write_string(errw, "no such file or directory")
+			case .Is_Directory:  winconsole.write_string(errw, "is a directory")
+			case .Access_Denied: winconsole.write_string(errw, "permission denied")
+			case:                winconsole.write_string(errw, "open failed")
+			}
+			winconsole.write_string(errw, "\r\n")
 		}
-		winconsole.write_string(errw, "\r\n")
 		return 0, true
 	}
 
@@ -68,45 +80,65 @@ search_one :: proc(
 	win.CloseHandle(fh)
 	defer delete(data)
 
-	matches := grep_bytes(string(data), pattern, opts)
+	matches := grep_bytes(string(data), opts)
 	defer delete(matches)
 
 	match_count = len(matches)
 
-	if count_only {
-		if show_filename {
-			winconsole.write_string(out, path)
-			winconsole.write_string(out, ":")
-		}
-		winconsole.write_string(out, fmt.tprintf("%d\r\n", match_count))
-		return
-	}
-
-	if files_only {
-		if match_count > 0 {
+	if files_without {
+		if match_count == 0 && !quiet {
 			winconsole.write_line(out, path)
 		}
 		return
 	}
 
-	for m in matches {
-		print_match(out, m, show_filename, path, show_line_num)
+	if count_only {
+		if !quiet {
+			if show_filename {
+				winconsole.write_string(out, path)
+				winconsole.write_string(out, ":")
+			}
+			winconsole.write_string(out, fmt.tprintf("%d\r\n", match_count))
+		}
+		return
+	}
+
+	if files_only {
+		if match_count > 0 && !quiet {
+			winconsole.write_line(out, path)
+		}
+		return
+	}
+
+	if !quiet {
+		for m in matches {
+			print_match(out, m, show_filename, path, show_line_num)
+		}
 	}
 	return
 }
 
 main :: proc() {
-	ignore_case, line_num, files_only, invert, count_only, recursive, help, version: bool
+	ignore_case, extended_re, fixed_strings, help, version: bool
+	line_num, files_only, files_without, invert, count_only, quiet, recursive, suppress_errors: bool
+	patterns, pattern_files: [dynamic]string
 	spec := cliflag.Spec{
 		flags = []cliflag.Flag_Def{
-			{short = 'i', long = "ignore-case",        kind = .Bool_Last_Wins, target = &ignore_case, value_if_set = true},
-			{short = 'n', long = "line-number",        kind = .Bool_Last_Wins, target = &line_num,    value_if_set = true},
-			{short = 'l', long = "files-with-matches", kind = .Bool_Last_Wins, target = &files_only,  value_if_set = true},
-			{short = 'v', long = "invert-match",       kind = .Bool_Last_Wins, target = &invert,      value_if_set = true},
-			{short = 'c', long = "count",              kind = .Bool_Last_Wins, target = &count_only,  value_if_set = true},
-			{short = 'r', long = "recursive",          kind = .Bool_Last_Wins, target = &recursive,   value_if_set = true},
-			{long  = "help",                           kind = .Bool_Last_Wins, target = &help,        value_if_set = true},
-			{long  = "version",                        kind = .Bool_Last_Wins, target = &version,     value_if_set = true},
+			{short = 'e', long = "regexp",           kind = .Value_Next, values = &patterns},
+			{short = 'f', long = "file",             kind = .Value_Next, values = &pattern_files},
+			{short = 'E', long = "extended-regexp",  kind = .Bool_Last_Wins, target = &extended_re,    value_if_set = true},
+			{short = 'F', long = "fixed-strings",    kind = .Bool_Last_Wins, target = &fixed_strings,  value_if_set = true},
+			{short = 'i', long = "ignore-case",      kind = .Bool_Last_Wins, target = &ignore_case,    value_if_set = true},
+			{short = 'n', long = "line-number",      kind = .Bool_Last_Wins, target = &line_num,       value_if_set = true},
+			{short = 'l', long = "files-with-matches", kind = .Bool_Last_Wins, target = &files_only,   value_if_set = true},
+			{short = 'L', long = "files-without-match", kind = .Bool_Last_Wins, target = &files_without, value_if_set = true},
+			{short = 'v', long = "invert-match",     kind = .Bool_Last_Wins, target = &invert,         value_if_set = true},
+			{short = 'c', long = "count",            kind = .Bool_Last_Wins, target = &count_only,     value_if_set = true},
+			{short = 'q', long = "quiet",            kind = .Bool_Last_Wins, target = &quiet,          value_if_set = true},
+			{short = 's', long = "no-messages",      kind = .Bool_Last_Wins, target = &suppress_errors, value_if_set = true},
+			{short = 'r', long = "recursive",        kind = .Bool_Last_Wins, target = &recursive,      value_if_set = true},
+			{             long = "help",             kind = .Bool_Last_Wins, target = &help,           value_if_set = true},
+			{             long = "version",          kind = .Bool_Last_Wins, target = &version,        value_if_set = true},
 		},
 	}
 
@@ -123,16 +155,47 @@ main :: proc() {
 		os.exit(2)
 	}
 	if help    { winconsole.write_string(out, USAGE); os.exit(0) }
-	if version { winconsole.write_line(out, "grep (winix) " + VERSION); os.exit(0) }
+	if version { winconsole.write_string(out, "grep (winix) " + VERSION + "\r\n"); os.exit(0) }
 
-	if len(parsed.rest) == 0 {
+	// Determine pattern.
+	pattern: string
+	if len(patterns) > 0 {
+		pattern = patterns[len(patterns)-1]
+	} else if len(parsed.rest) > 0 {
+		pattern = parsed.rest[0]
+	} else {
 		winconsole.write_string(errw, "grep: missing PATTERN\r\nTry 'grep --help'.\r\n")
 		os.exit(2)
 	}
 
-	pattern    := parsed.rest[0]
-	file_args  := parsed.rest[1:]
-	opts       := Match_Opts{ignore_case = ignore_case, invert = invert}
+	// Build file list.
+	file_args := parsed.rest[1:] if len(parsed.rest) > 1 else []string{}
+	if len(patterns) > 0 && len(parsed.rest) > 0 {
+		file_args = parsed.rest
+	}
+
+	// Compile regex pattern if not fixed-string.
+	opts: Match_Opts
+	opts.pattern = pattern
+	if fixed_strings {
+		opts.fixed = true
+	} else {
+		opts.fixed = false
+		flags: regexp.Flags = {}
+		if ignore_case {
+			flags = flags | { .Case_Insensitive }
+		}
+re, err := regexp.create(pattern, flags)
+	if err != nil {
+		winconsole.write_string(errw, "grep: invalid regular expression: ")
+		winconsole.write_string(errw, pattern)
+		winconsole.write_string(errw, "\r\n")
+		os.exit(2)
+	}
+	opts.regex = re
+	}
+	opts.ignore_case = ignore_case
+	opts.invert = invert
 
 	// Resolve files: expand directories if -r, warn otherwise.
 	files := make([dynamic]string)
@@ -143,11 +206,13 @@ main :: proc() {
 		h := win.GetStdHandle(win.STD_INPUT_HANDLE)
 		if win.GetFileType(h) != win.FILE_TYPE_CHAR {
 			data    := read_all(h)
-			matches := grep_bytes(string(data), pattern, opts)
+			matches := grep_bytes(string(data), opts)
 			n       := len(matches)
 			if count_only {
-				winconsole.write_string(out, fmt.tprintf("%d\r\n", n))
-			} else {
+				if !quiet {
+					winconsole.write_string(out, fmt.tprintf("%d\r\n", n))
+				}
+			} else if !quiet {
 				for m in matches {
 					if line_num {
 						winconsole.write_string(out, fmt.tprintf("%d:", m.line_num))
@@ -160,8 +225,12 @@ main :: proc() {
 			delete(data)
 			os.exit(0 if n > 0 else 1)
 		}
-		winconsole.write_string(errw, "grep: missing PATTERN and no files\r\nTry 'grep --help'.\r\n")
-		os.exit(2)
+		// Read from files given as arguments.
+		if len(parsed.rest) == 0 {
+			winconsole.write_string(errw, "grep: missing PATTERN and no files\r\nTry 'grep --help'.\r\n")
+			os.exit(2)
+		}
+		file_args = parsed.rest
 	}
 
 	// Build the effective file list, expanding directories when -r.
@@ -175,7 +244,7 @@ main :: proc() {
 				for p in dir_expanded[before:] {
 					append(&files, p)
 				}
-			} else {
+			} else if !suppress_errors {
 				winconsole.write_string(errw, "grep: ")
 				winconsole.write_string(errw, path)
 				winconsole.write_string(errw, ": is a directory\r\n")
@@ -190,7 +259,7 @@ main :: proc() {
 	had_error     := false
 
 	for path in files {
-		mc, err := search_one(out, errw, path, pattern, opts, show_filename, line_num, files_only, count_only)
+		mc, err := search_one(out, errw, path, opts, show_filename, line_num, files_only, files_without, count_only, quiet, suppress_errors)
 		if err  { had_error = true }
 		if mc > 0 { any_match = true }
 	}
