@@ -73,3 +73,47 @@ version_exits_0 :: proc(t: ^testing.T) {
 	_, _, code := run(t, []string{"--version"})
 	testing.expect_value(t, code, 0)
 }
+
+@(test)
+use_percent_is_not_zero_padded :: proc(t: ^testing.T) {
+	out, _, code := run(t, []string{})
+	defer delete(out)
+	testing.expect_value(t, code, 0)
+
+	lines := strings.split_lines(string(out), context.temp_allocator)
+	for line in lines {
+		if len(line) == 0 || strings.has_prefix(line, "Filesystem") { continue }
+		pct := strings.last_index_byte(line, '%')
+		if pct < 1 { continue }
+
+		start := pct
+		for start > 0 && line[start-1] >= '0' && line[start-1] <= '9' {
+			start -= 1
+		}
+		digits := line[start:pct]
+		if len(digits) > 1 {
+			testing.expect(t, digits[0] != '0', "use percentage should be space-padded, not zero-padded")
+		}
+	}
+}
+
+@(test)
+print_type_with_path_shows_filesystem :: proc(t: ^testing.T) {
+	tmp, _ := os.temp_dir(context.allocator)
+	defer delete(tmp)
+
+	out, _, code := run(t, []string{"-T", tmp})
+	defer delete(out)
+	testing.expect_value(t, code, 0)
+
+	lines := strings.split_lines(string(out), context.temp_allocator)
+	testing.expect(t, len(lines) >= 2, "expected header and one data row")
+	if len(lines) < 2 { return }
+
+	fields, err := strings.fields(lines[1], context.temp_allocator)
+	if err != nil { testing.fail_now(t, "strings.fields failed") }
+	testing.expect(t, len(fields) >= 2, "expected filesystem type column")
+	if len(fields) >= 2 {
+		testing.expect(t, len(fields[1]) > 0, "expected non-empty filesystem type")
+	}
+}

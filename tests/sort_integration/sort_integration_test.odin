@@ -3,6 +3,7 @@ package sort_integration_test
 import "core:os"
 import "core:strings"
 import "core:testing"
+import "../testutil"
 
 @(private = "file")
 EXE :: "bin/sort.exe"
@@ -33,7 +34,7 @@ sorts_alphabetically :: proc(t: ^testing.T) {
 	dir := strings.concatenate({base, "\\winix-sort-alpha"}, context.allocator)
 	defer delete(dir)
 	os.make_directory(dir)
-	defer os.remove_all(dir)
+	defer testutil.remove_tree(dir)
 
 	f := strings.concatenate({dir, "\\a.txt"}, context.allocator)
 	defer delete(f)
@@ -52,7 +53,7 @@ reverse_flag :: proc(t: ^testing.T) {
 	dir := strings.concatenate({base, "\\winix-sort-rev"}, context.allocator)
 	defer delete(dir)
 	os.make_directory(dir)
-	defer os.remove_all(dir)
+	defer testutil.remove_tree(dir)
 
 	f := strings.concatenate({dir, "\\b.txt"}, context.allocator)
 	defer delete(f)
@@ -71,7 +72,7 @@ unique_flag :: proc(t: ^testing.T) {
 	dir := strings.concatenate({base, "\\winix-sort-uniq"}, context.allocator)
 	defer delete(dir)
 	os.make_directory(dir)
-	defer os.remove_all(dir)
+	defer testutil.remove_tree(dir)
 
 	f := strings.concatenate({dir, "\\c.txt"}, context.allocator)
 	defer delete(f)
@@ -90,7 +91,7 @@ numeric_sort :: proc(t: ^testing.T) {
 	dir := strings.concatenate({base, "\\winix-sort-num"}, context.allocator)
 	defer delete(dir)
 	os.make_directory(dir)
-	defer os.remove_all(dir)
+	defer testutil.remove_tree(dir)
 
 	f := strings.concatenate({dir, "\\d.txt"}, context.allocator)
 	defer delete(f)
@@ -109,7 +110,7 @@ ignore_case_sort :: proc(t: ^testing.T) {
 	dir := strings.concatenate({base, "\\winix-sort-fold"}, context.allocator)
 	defer delete(dir)
 	os.make_directory(dir)
-	defer os.remove_all(dir)
+	defer testutil.remove_tree(dir)
 
 	f := strings.concatenate({dir, "\\e.txt"}, context.allocator)
 	defer delete(f)
@@ -128,7 +129,7 @@ multiple_files_concatenated :: proc(t: ^testing.T) {
 	dir := strings.concatenate({base, "\\winix-sort-multi"}, context.allocator)
 	defer delete(dir)
 	os.make_directory(dir)
-	defer os.remove_all(dir)
+	defer testutil.remove_tree(dir)
 
 	f1 := strings.concatenate({dir, "\\f1.txt"}, context.allocator)
 	defer delete(f1)

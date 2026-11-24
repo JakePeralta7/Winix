@@ -26,11 +26,11 @@ With no flags, wc prints lines, words, and bytes.
 `
 
 print_counts :: proc(out: winconsole.Writer, c: Counts, label: string, lines, words, bytes, chars, maxlen: bool) {
-	if lines  { winconsole.write_string(out, fmt.tprintf(" %7d", c.lines)) }
-	if words  { winconsole.write_string(out, fmt.tprintf(" %7d", c.words)) }
-	if chars  { winconsole.write_string(out, fmt.tprintf(" %7d", c.chars)) }
-	if bytes  { winconsole.write_string(out, fmt.tprintf(" %7d", c.bytes)) }
-	if maxlen { winconsole.write_string(out, fmt.tprintf(" %7d", c.max_line)) }
+	if lines  { winconsole.write_string(out, fmt.tprintf(" % 7d", c.lines)) }
+	if words  { winconsole.write_string(out, fmt.tprintf(" % 7d", c.words)) }
+	if chars  { winconsole.write_string(out, fmt.tprintf(" % 7d", c.chars)) }
+	if bytes  { winconsole.write_string(out, fmt.tprintf(" % 7d", c.bytes)) }
+	if maxlen { winconsole.write_string(out, fmt.tprintf(" % 7d", c.max_line)) }
 	if label != "" {
 		winconsole.write_string(out, " ")
 		winconsole.write_string(out, label)

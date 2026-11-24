@@ -3,6 +3,7 @@ package tail_integration_test
 import "core:os"
 import "core:strings"
 import "core:testing"
+import "../testutil"
 
 @(private = "file")
 EXE :: "bin/tail.exe"
@@ -37,7 +38,7 @@ prints_last_n_lines :: proc(t: ^testing.T) {
 	dir := strings.concatenate({base, "\\winix-tail-basic"}, context.allocator)
 	defer delete(dir)
 	os.make_directory(dir)
-	defer os.remove_all(dir)
+	defer testutil.remove_tree(dir)
 
 	file := strings.concatenate({dir, "\\data.txt"}, context.allocator)
 	defer delete(file)
@@ -56,7 +57,7 @@ default_is_ten_lines :: proc(t: ^testing.T) {
 	dir := strings.concatenate({base, "\\winix-tail-default"}, context.allocator)
 	defer delete(dir)
 	os.make_directory(dir)
-	defer os.remove_all(dir)
+	defer testutil.remove_tree(dir)
 
 	file := strings.concatenate({dir, "\\data.txt"}, context.allocator)
 	defer delete(file)
@@ -76,7 +77,7 @@ short_file_prints_all :: proc(t: ^testing.T) {
 	dir := strings.concatenate({base, "\\winix-tail-short"}, context.allocator)
 	defer delete(dir)
 	os.make_directory(dir)
-	defer os.remove_all(dir)
+	defer testutil.remove_tree(dir)
 
 	file := strings.concatenate({dir, "\\data.txt"}, context.allocator)
 	defer delete(file)

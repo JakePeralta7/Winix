@@ -3,6 +3,7 @@ package touch_integration_test
 import "core:os"
 import "core:strings"
 import "core:testing"
+import "../testutil"
 
 @(private = "file")
 EXE :: "bin/touch.exe"
@@ -37,7 +38,7 @@ creates_new_file :: proc(t: ^testing.T) {
 	dir := strings.concatenate({base, "\\winix-touch-create"}, context.allocator)
 	defer delete(dir)
 	os.make_directory(dir)
-	defer os.remove_all(dir)
+	defer testutil.remove_tree(dir)
 
 	file := strings.concatenate({dir, "\\new.txt"}, context.allocator)
 	defer delete(file)
@@ -55,7 +56,7 @@ updates_existing_file :: proc(t: ^testing.T) {
 	dir := strings.concatenate({base, "\\winix-touch-update"}, context.allocator)
 	defer delete(dir)
 	os.make_directory(dir)
-	defer os.remove_all(dir)
+	defer testutil.remove_tree(dir)
 
 	file := strings.concatenate({dir, "\\existing.txt"}, context.allocator)
 	defer delete(file)
@@ -74,7 +75,7 @@ creates_multiple_files :: proc(t: ^testing.T) {
 	dir := strings.concatenate({base, "\\winix-touch-multi"}, context.allocator)
 	defer delete(dir)
 	os.make_directory(dir)
-	defer os.remove_all(dir)
+	defer testutil.remove_tree(dir)
 
 	a := strings.concatenate({dir, "\\a.txt"}, context.allocator)
 	defer delete(a)

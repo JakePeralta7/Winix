@@ -3,6 +3,7 @@ package mv_integration_test
 import "core:os"
 import "core:strings"
 import "core:testing"
+import "../testutil"
 
 @(private = "file")
 EXE :: "bin/mv.exe"
@@ -37,7 +38,7 @@ renames_file :: proc(t: ^testing.T) {
 	dir := strings.concatenate({base, "\\winix-mv-rename"}, context.allocator)
 	defer delete(dir)
 	os.make_directory(dir)
-	defer os.remove_all(dir)
+	defer testutil.remove_tree(dir)
 
 	src := strings.concatenate({dir, "\\src.txt"}, context.allocator)
 	defer delete(src)
@@ -58,7 +59,7 @@ moves_file_into_directory :: proc(t: ^testing.T) {
 	dir := strings.concatenate({base, "\\winix-mv-intodir"}, context.allocator)
 	defer delete(dir)
 	os.make_directory(dir)
-	defer os.remove_all(dir)
+	defer testutil.remove_tree(dir)
 
 	sub := strings.concatenate({dir, "\\sub"}, context.allocator)
 	defer delete(sub)
@@ -84,7 +85,7 @@ overwrites_existing_by_default :: proc(t: ^testing.T) {
 	dir := strings.concatenate({base, "\\winix-mv-overwrite"}, context.allocator)
 	defer delete(dir)
 	os.make_directory(dir)
-	defer os.remove_all(dir)
+	defer testutil.remove_tree(dir)
 
 	src := strings.concatenate({dir, "\\src.txt"}, context.allocator)
 	defer delete(src)
@@ -107,7 +108,7 @@ no_clobber_skips_existing :: proc(t: ^testing.T) {
 	dir := strings.concatenate({base, "\\winix-mv-noclobber"}, context.allocator)
 	defer delete(dir)
 	os.make_directory(dir)
-	defer os.remove_all(dir)
+	defer testutil.remove_tree(dir)
 
 	src := strings.concatenate({dir, "\\src.txt"}, context.allocator)
 	defer delete(src)

@@ -30,6 +30,12 @@ foreign kernel32 {
 		lpFileSystemNameBuffer:     win.LPWSTR,
 		nFileSystemNameSize:        win.DWORD,
 	) -> win.BOOL ---
+
+	GetVolumePathNameW :: proc(
+		lpszFileName:       win.LPCWSTR,
+		lpszVolumePathName: win.LPWSTR,
+		cchBufferLength:    win.DWORD,
+	) -> win.BOOL ---
 }
 
 DRIVE_FIXED    :: win.UINT(3)
@@ -59,10 +65,27 @@ query_disk :: proc(path: string) -> (Disk_Info, bool) {
 	return info, true
 }
 
+// volume_root resolves any path on a volume to that volume's root path.
+// GetVolumeInformationW requires a root, not an arbitrary file or directory.
+volume_root :: proc(path: string) -> string {
+	wpath := win.utf8_to_wstring(path, context.temp_allocator)
+	buffer: [win.MAX_PATH_WIDE]u16
+	if !GetVolumePathNameW(wpath, &buffer[0], win.DWORD(len(buffer))) {
+		return path
+	}
+
+	n := 0
+	for n < len(buffer) && buffer[n] != 0 {
+		n += 1
+	}
+	root, err := win.utf16_to_utf8(buffer[:n], context.temp_allocator)
+	return root if err == nil else path
+}
+
 // query_fs_type returns the filesystem name of the volume containing path
 // (e.g. "NTFS") or "" when it cannot be determined.
 query_fs_type :: proc(path: string) -> string {
-	wpath := win.utf8_to_wstring(path, context.temp_allocator)
+	wpath := win.utf8_to_wstring(volume_root(path), context.temp_allocator)
 	serial: win.DWORD
 	maxlen: win.DWORD
 	flags:  win.DWORD

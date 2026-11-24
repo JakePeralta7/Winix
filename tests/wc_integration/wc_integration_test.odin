@@ -48,6 +48,7 @@ counts_lines_words_bytes :: proc(t: ^testing.T) {
 	testing.expect(t, strings.contains(s, "2"),  "expected line count 2")
 	testing.expect(t, strings.contains(s, "4"),  "expected word count 4")
 	testing.expect(t, strings.contains(s, "20"), "expected byte count 20")
+	testing.expect(t, strings.has_prefix(s, "2 "), "counts should be space-padded, not zero-padded")
 }
 
 @(test)

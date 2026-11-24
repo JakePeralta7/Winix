@@ -135,7 +135,7 @@ main :: proc() {
 		if unique_flag && run.count  > 1 { continue }
 
 		if count_flag {
-			winconsole.write_string(out, fmt.tprintf("%7d ", run.count))
+			winconsole.write_string(out, fmt.tprintf("% 7d ", run.count))
 		}
 		winconsole.write_string(out, run.line)
 		winconsole.write_string(out, string([]u8{delim}))

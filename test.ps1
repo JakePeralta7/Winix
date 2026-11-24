@@ -1,9 +1,13 @@
 $ErrorActionPreference = 'Stop'
 
+# These are black-box tests of external binaries, so runner-side memory tracking
+# adds noise without covering the code under test.
+$Test_Defines = @('-define:ODIN_TEST_TRACK_MEMORY=false')
+
 Write-Host "Running unit tests..."
 foreach ($p in @('cliflag', 'winconsole', 'pwd_unit')) {
     Write-Host "  tests/$p"
-    odin test "tests/$p"
+    odin test "tests/$p" @Test_Defines
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Unit tests failed: $p"
         exit $LASTEXITCODE
@@ -19,9 +23,9 @@ foreach ($pkg in @('pwd_integration', 'ls_integration', 'rm_integration', 'cat_i
     Write-Host "  tests/$pkg"
     if ($pkg -eq 'pkill_integration') {
         # pkill integration tests spawn/kill real processes and can interfere when run in parallel.
-        odin test "tests/$pkg" -define:ODIN_TEST_THREADS=1
+        odin test "tests/$pkg" -define:ODIN_TEST_THREADS=1 @Test_Defines
     } else {
-        odin test "tests/$pkg"
+        odin test "tests/$pkg" @Test_Defines
     }
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Integration tests failed: $pkg"

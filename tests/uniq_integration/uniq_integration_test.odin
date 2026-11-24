@@ -3,6 +3,7 @@ package uniq_integration_test
 import "core:os"
 import "core:strings"
 import "core:testing"
+import "../testutil"
 
 @(private = "file")
 EXE :: "bin/uniq.exe"
@@ -33,7 +34,7 @@ removes_adjacent_duplicates :: proc(t: ^testing.T) {
 	dir := strings.concatenate({base, "\\winix-uniq-basic"}, context.allocator)
 	defer delete(dir)
 	os.make_directory(dir)
-	defer os.remove_all(dir)
+	defer testutil.remove_tree(dir)
 
 	f := strings.concatenate({dir, "\\a.txt"}, context.allocator)
 	defer delete(f)
@@ -52,7 +53,7 @@ count_flag :: proc(t: ^testing.T) {
 	dir := strings.concatenate({base, "\\winix-uniq-count"}, context.allocator)
 	defer delete(dir)
 	os.make_directory(dir)
-	defer os.remove_all(dir)
+	defer testutil.remove_tree(dir)
 
 	f := strings.concatenate({dir, "\\b.txt"}, context.allocator)
 	defer delete(f)
@@ -63,6 +64,7 @@ count_flag :: proc(t: ^testing.T) {
 	testing.expect_value(t, code, 0)
 	testing.expect(t, strings.contains(string(out), "3"), "expected count 3 for 'x'")
 	testing.expect(t, strings.contains(string(out), "1"), "expected count 1 for 'y'")
+	testing.expect(t, strings.has_prefix(strings.trim_space(string(out)), "3 "), "counts should be space-padded, not zero-padded")
 }
 
 @(test)
@@ -72,7 +74,7 @@ repeated_flag :: proc(t: ^testing.T) {
 	dir := strings.concatenate({base, "\\winix-uniq-dup"}, context.allocator)
 	defer delete(dir)
 	os.make_directory(dir)
-	defer os.remove_all(dir)
+	defer testutil.remove_tree(dir)
 
 	f := strings.concatenate({dir, "\\c.txt"}, context.allocator)
 	defer delete(f)
@@ -91,7 +93,7 @@ unique_flag :: proc(t: ^testing.T) {
 	dir := strings.concatenate({base, "\\winix-uniq-uniq"}, context.allocator)
 	defer delete(dir)
 	os.make_directory(dir)
-	defer os.remove_all(dir)
+	defer testutil.remove_tree(dir)
 
 	f := strings.concatenate({dir, "\\d.txt"}, context.allocator)
 	defer delete(f)
@@ -110,7 +112,7 @@ ignore_case_flag :: proc(t: ^testing.T) {
 	dir := strings.concatenate({base, "\\winix-uniq-ci"}, context.allocator)
 	defer delete(dir)
 	os.make_directory(dir)
-	defer os.remove_all(dir)
+	defer testutil.remove_tree(dir)
 
 	f := strings.concatenate({dir, "\\e.txt"}, context.allocator)
 	defer delete(f)
@@ -141,7 +143,7 @@ extra_operand_exits_2 :: proc(t: ^testing.T) {
 	dir := strings.concatenate({base, "\\winix-uniq-extra"}, context.allocator)
 	defer delete(dir)
 	os.make_directory(dir)
-	defer os.remove_all(dir)
+	defer testutil.remove_tree(dir)
 
 	f1 := strings.concatenate({dir, "\\x.txt"}, context.allocator)
 	defer delete(f1)

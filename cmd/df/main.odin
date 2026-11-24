@@ -155,10 +155,10 @@ print_disk :: proc(out: winconsole.Writer, info: Disk_Info, divisor: u64, print_
 		use_pct := 0 if total_inodes == 0 else int(used_inodes * 100 / total_inodes)
 
 		if print_type {
-			winconsole.write_string(out, fmt.tprintf("%-16s %-8s %12d %12d %12d %3d%%\r\n",
+			winconsole.write_string(out, fmt.tprintf("%-16s %-8s % 12d % 12d % 12d % 3d%%\r\n",
 				info.root, info.fs_type, total_inodes, used_inodes, free_inodes, use_pct))
 		} else {
-			winconsole.write_string(out, fmt.tprintf("%-16s %12d %12d %12d %3d%%\r\n",
+			winconsole.write_string(out, fmt.tprintf("%-16s % 12d % 12d % 12d % 3d%%\r\n",
 				info.root, total_inodes, used_inodes, free_inodes, use_pct))
 		}
 		return
@@ -169,12 +169,12 @@ print_disk :: proc(out: winconsole.Writer, info: Disk_Info, divisor: u64, print_
 
 	if divisor == 0 {
 		if print_type {
-			winconsole.write_string(out, fmt.tprintf("%-16s %-8s %6s %6s %6s %3d%%\r\n",
+			winconsole.write_string(out, fmt.tprintf("%-16s %-8s %6s %6s %6s % 3d%%\r\n",
 				info.root, info.fs_type,
 				format_size_human(info.total), format_size_human(used), format_size_human(info.avail),
 				use_pct))
 		} else {
-			winconsole.write_string(out, fmt.tprintf("%-16s %6s %6s %6s %3d%%\r\n",
+			winconsole.write_string(out, fmt.tprintf("%-16s %6s %6s %6s % 3d%%\r\n",
 				info.root,
 				format_size_human(info.total), format_size_human(used), format_size_human(info.avail),
 				use_pct))
@@ -183,14 +183,14 @@ print_disk :: proc(out: winconsole.Writer, info: Disk_Info, divisor: u64, print_
 	}
 
 	if print_type {
-		winconsole.write_string(out, fmt.tprintf("%-16s %-8s %12s %12s %12s %3d%%\r\n",
+		winconsole.write_string(out, fmt.tprintf("%-16s %-8s %12s %12s %12s % 3d%%\r\n",
 			info.root, info.fs_type,
 			format_size_blocks(info.total, divisor),
 			format_size_blocks(used, divisor),
 			format_size_blocks(info.avail, divisor),
 			use_pct))
 	} else {
-		winconsole.write_string(out, fmt.tprintf("%-16s %12s %12s %12s %3d%%\r\n",
+		winconsole.write_string(out, fmt.tprintf("%-16s %12s %12s %12s % 3d%%\r\n",
 			info.root,
 			format_size_blocks(info.total, divisor),
 			format_size_blocks(used, divisor),
